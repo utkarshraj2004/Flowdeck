@@ -46,11 +46,11 @@
 | 36 | Mirror cards | D13 | DOC | Sync semantics | Out | Yes |
 | 37 | Global search + operators | D05, O05 | OBS | Doc inconsistency (`has:member`); ranking | Ready (FD subset) | Yes |
 | 38 | Board filter | D04, O03, O05 | OBS | Filter UI options | Ready (FD) | No (client-side over loaded board) |
-| 39 | Notifications (in-app) and watching | D12, O05 | Partial (OBS drawer + join request) | Trigger list documented; UI not observed | Ready | Yes |
+| 39 | Notifications (in-app) and watching | D12, O05 | OBS (watcher triggers from another user) | Trigger list documented; UI not observed | Ready | Yes |
 | 40 | Email notifications / digests | D12, O05 | OBS (settings) | — (default Periodically) | Later | Yes (+ SMTP) |
 | 41 | Keyboard shortcuts | D04, O04 | OBS | — (full list observed) | Ready (FD set) | No |
-| 42 | Real-time updates | D16, D28, T06, O03, O04, O05 | Partial (OBS same-user fan-out) | Two-user latency; payload semantics (not inspected) | Ready (FD contract, 06) | Yes |
-| 43 | Concurrent edits | O05 | Partial (OBS same user, last-write-wins) | Two different users | Ready (FD rules, 07) | Yes |
+| 42 | Real-time updates | D16, D28, T06, O03, O04, O05 | OBS (cross-user, viewer) | Two-user latency; payload semantics (not inspected) | Ready (FD contract, 06) | Yes |
+| 43 | Concurrent edits | O05 | Partial (same user: last-write-wins; cross-user archive/delete while open) | Two different *editing* users | Ready (FD rules, 07) | Yes |
 | 44 | Refresh / persistence | D16, O04, O05 | OBS | — | Ready (FD) | Yes |
 | 45 | Mobile layout and touch | O03, O05 | Partial (OBS layout; touch drag not reproducible) | All Trello mobile UI | Ready (FD, J15) | No (client) |
 | 46 | Offline mobile editing | D27 | Partial (2016-17) | Current status | Out | Yes |
@@ -70,6 +70,8 @@
 | 60 | Self-hosting, backup, restore, upgrade | — (Trello is SaaS) | N/A | — | Ready (FD, 08) | Yes |
 
 ## Summary
+
+**Cross-user round:** User B was verified **not** to be a member (the owner's step made the board Public). As a public viewer, B made T4 cross-user latency, watcher notifications (39) and the public-viewer permission set observable. Rows 39 and 42 became OBS. Member-role rows (7, 8, 25) and two-editor conflicts (43) remain unobserved.
 
 **Session 2, authenticated ([E-session2-auth](evidence/E-session2-auth.md)):** with the test accounts logged in, **29 rows gained observed (OBS) evidence** (6, 9, 10, 11, 15, 17–26, 29, 30, 32–34, 37–40, 42–45, 48). The main remaining gaps are multi-user: roles and permissions for a second user (7, 8, 25, 30 mentions), cross-user real-time and conflicts (42, 43), and touch drag (45). These are blocked because Trello silently refused every way of adding User B. Readiness is unchanged: every MVP row was already buildable from Flowdeck decisions; parity details are now much firmer.
 

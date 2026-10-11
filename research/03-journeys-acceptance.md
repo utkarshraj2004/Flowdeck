@@ -137,6 +137,6 @@ These refine the acceptance criteria above. Source: [E-session2-auth](evidence/E
 | J08.7 | Image upload becomes the cover automatically; Links and Files are grouped; over-limit is rejected client-side with an upgrade message | Auto-cover on first image (setting); limit error names the configured size |
 | J08.9 | Activity lacks description and label changes | Flowdeck logs them (INF; more useful for a team) |
 | J09 | Filter state in URL; `x` clears; search operators work on the results page | Same |
-| J10 | Default email frequency **Periodically (hourly)** on a fresh account | Default `periodic` when email is enabled |
-| J11 | Same-user two-tab fan-out 0.44–1.0 s (median ≈ 0.48 s) | p95 < 1 s on LAN (unchanged) |
-| J12 | Non-member opening a workspace board gets "private · Send request"; request appears as a notification for admins with a one-click approve | Same flow (Later); approval must actually add the member and show an error if it can't |
+| J10 | Default email frequency **Periodically (hourly)**. Watcher gets notified of another user's comment, due change, attachment, complete and move; notifications grouped per card in the drawer; red bell count on the card front; no self-notifications; non-members are not notified by @mentions | Same rules; group by card in the drawer; card-front unread badge |
+| J11 | Cross-user fan-out 0.38–0.91 s (median ≈ 0.44 s); open dialogs update live on archive/delete by another user | p95 < 1 s on LAN; open-card conflict states as in 02 |
+| J12 | Non-member opening a workspace board gets "private · Send request"; request appears as a notification for admins with a one-click approve. Public viewers: read-only UI **and** server-side 401 on writes | Same flow (Later); approval must actually add the member and show an error if it can't; every write checked server-side |

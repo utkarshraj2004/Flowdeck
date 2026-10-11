@@ -45,7 +45,9 @@ These items block **observed** evidence, not the build.
 2. Use **test accounts with non-relay email addresses**, or let the accounts age. Trello may limit new or relay-address accounts (unverified hypothesis).
 3. Accept the gap: build permissions from DOC-direct + Flowdeck rules (04), which is already specified.
 
-Each new login from a new device needs the emailed code again unless the accounts use authenticator-app 2SV (TOTP secrets as environment variables).
+**Update after the cross-user round:** the owner's manual step changed FD Parity Board's visibility to **Public** (board history, 19:38 UTC). It did not make User B a member, which was verified from both accounts. Cross-user real-time, watcher notifications and the public-viewer permission set are now observed. **Still blocked:** two different users editing the same card (T3), and member/observer/guest rows (T5). These need B to appear under Share → Board members as a member. **The board is Public**, so its synthetic content is visible on the internet until it is set back to Workspace or Private.
+
+Login note: the browser profiles survived a container restart without a new email code, but new devices or sessions can still be challenged; authenticator-app 2SV is **not** assumed to remove those challenges.
 
 ### Earlier status (session 1, kept for history)
 

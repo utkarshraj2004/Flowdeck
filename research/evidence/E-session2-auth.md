@@ -151,3 +151,67 @@ User B could not be added (§11), so two tabs of User A (separate pages and sock
 |---|---|
 | 375 × 812, touch, iPhone user agent: header shrinks to logo · search icon · Create · `⋯`. Board header: name, view switcher, filter, `⋯`. Lists stay **272 px**, the next list peeks in, and there is no page-level horizontal scroll. The bottom bar is icon-only; its tooltip "Board **g+b**" shows a `g`-prefixed navigation shortcut not on the shortcuts page. | [m01](screens/auth-m01-mobile-board.png) |
 | Card dialog becomes **near full-width (359 of 375 px), one column**, with the same sections stacked; the floating bottom bar is icon-only. | [m02](screens/auth-m02-mobile-card.png) |
+
+## 14 · Cross-user round (owner's manual step), 2026-10-11 ~19:45–20:00 UTC
+
+The container restarted between turns. Both browser profiles were still logged in, so **no new email verification was requested** this time. (This says nothing about future sessions or new devices.)
+
+### Membership as verified, not as assumed
+
+| Check (each account's own session) | Result |
+|---|---|
+| Board memberships (`/1/boards/<id>/memberships`), seen by A and by B | **Only User A (admin).** User B is **not** a board member. |
+| B's own board list | Does not include FD Parity Board. |
+| Workspace memberships | Only User A. B gets 401 on the workspace member list. |
+| Board change history (`updateBoard`, membership actions) | **19:38:13 UTC: User A changed visibility `org → public`.** No add-member, invite or role action exists. |
+| Why B "can access" | The board is **Public**, so B reads it as a logged-in **public viewer**, not as a member. |
+
+So the owner's manual step made the board public; it did not add B. Adding B was not retried here (four routes had already failed silently, §11). Tests that need B as a **member** (two-user edit conflicts, member/observer/guest rows) remain blocked. Everything else below uses B as a logged-in public viewer.
+
+### T5 · Logged-in public viewer (non-member) on a public board
+
+| Area | Observation | Evidence |
+|---|---|---|
+| Board header | Views, facepile, filter, star, globe ("Public"), menu. **No Share, no Power-ups, no Automation.** | [n01](screens/auth-n01-userB-public-viewer-board.png) |
+| Lists and cards | No "Add a card" and no "Add another list". **No card is draggable** (0 of 9 have `draggable`). The list menu contains only **Watch**. | [n01](screens/auth-n01-userB-public-viewer-board.png), [n02](screens/auth-n02-userB-list-menu.png) |
+| Board menu | About this board · Visibility: Public · Print, export, and share · Star · Labels · Activity · Archived items · Watch · Copy board · Report abuse. (No Share, Settings, Change background, Automation, Power-Ups, Stickers, Make template, Email-to-board, Close board.) | [n03](screens/auth-n03-userB-board-menu.png) |
+| Card back | Read-only: list chip is not a dropdown; a card icon replaces the completion circle; no Add/Labels/Dates/Checklist/Members buttons; title not editable; Power-ups/Automations greyed; **no comment box** (commenting = Members). Labels, due date, description, attachments and activity are visible. | [n04](screens/auth-n04-userB-card-back.png) |
+| Card actions | **Copy · Mirror · Watch · Share** only. | [n06](screens/auth-n06-userB-card-actions.png) |
+| Keyboard shortcuts | Hover + `c` (archive) and Space (join) did **nothing**: no toast, and no write request left the browser. The UI simply omits the action. | [n05](screens/auth-n05-userB-shortcut-attempts.png) |
+| Server enforcement | One direct write each with B's own session: `PUT /1/cards/<id>` (rename) → **401 "unauthorized card permission requested"**; `POST /1/cards/<id>/actions/comments` → **401**, same message. | API |
+| Watching | A non-member **can watch** a card on a public board (Actions → Watch; API `subscribed: true`). | [n08](screens/auth-n08-userB-watching-card.png) |
+
+### T4 · Updates between the two accounts
+
+| Check | Result |
+|---|---|
+| A creates a card; time until it is visible on B's open board (5 trials) | **383, 442, 410, 876, 914 ms** (median ≈ 440 ms) |
+| A moves a card to another list (`.`); time until B sees it in the new list | 854 ms |
+| A archives a card **B has open** | B's open dialog updated live with the banner "This card was archived on …" ([n11](screens/auth-n11-userB-card-archived-by-A.png)) |
+| A deletes (from Archived items) a card **B has open** | B's dialog was replaced live by the full-page **"Card not found."** view ([n12](screens/auth-n12-userB-card-deleted-by-A.png)) |
+| Receiving updates as a non-member | Public viewers receive live board updates the same way members do (latency in the same range as the same-user test). |
+
+### T8 · Notifications triggered by another user
+
+| Trigger by A | B (watching the card, non-member) | Evidence |
+|---|---|---|
+| Comment on the watched card | `commentCard` notification ✓ | [n09](screens/auth-n09-userB-notifications-from-A.png) |
+| Add due date | `changeCard` ("Added a due date of tomorrow at 7:49 PM") ✓ | same |
+| Attach link | `addAttachmentToCard` ✓ | same |
+| Mark complete | `markedCompleteCard` ✓ | same |
+| Move to another list | `changeCard` ("Moved to list Doing") ✓ | same |
+| **@mention** of B (B is not a member) | Autocomplete offered **no suggestion**; with the full username typed, **no notification** reached B. The comment was deleted right afterwards because the board is public. | [n10](screens/auth-n10-mention-autocomplete.png) (username blacked out) |
+| A's own actions | A received **no** notifications for A's own actions; A's list held only three "requestAccessBoardNotInOrganization" items. | API |
+
+Drawer presentation (B): notifications are **grouped under one card header** (cover strip, title with complete tick, due chip, "Board: List"), then the actor and one line per action with "just now", the comment text in a bubble, and a reaction button. **Card-front badge:** a red bell with the unread count ("5") appears on the watched card for B. The comment composer has a **"Watch" checkbox** next to Save. Moving a card with `,` shows the toast **"Card moved left · Undo"** (an Undo *button*, unlike the "press Z" hint on archive).
+
+### Also observed
+
+- A copied card's activity says "copied this card from <card> in list <list>" and **"copied comment by <author> from card <card>"**: copied comments keep their original author ([n04](screens/auth-n04-userB-card-back.png)).
+
+### Still blocked or unverified after this round
+
+- **T3 between two different users**: B cannot edit (401), so no two-user conflict was possible. Same-user result (§9) stands: last write wins, no warning.
+- **T5 member, observer and guest rows**: need B as an actual member. Observer is a paid feature anyway.
+- **@mention and "added to card" notifications for a member**: need B as a member.
+- **Touch drag on a real phone**: unverified (emulation cannot start native drags).

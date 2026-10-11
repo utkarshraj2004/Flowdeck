@@ -16,7 +16,9 @@
 | Edits made offline are not queued (toast "changes will not be saved"; the composer does nothing). | OBS O05 |
 | Card title limit 16384 (silently refused above); upload limit 10 MiB on free (client-side check). | OBS O05 |
 
-**Still not observed:** renumbering when positions get very close, and conflict outcomes for two *different* users (only same-user two tabs were possible). See [E-session2-auth](evidence/E-session2-auth.md).
+| Card archived / deleted by another user while open: the open dialog updates live (archived banner) or is replaced by "Card not found". Matches Flowdeck's conflict-state rule. | OBS O05 §14 (cross-user) |
+
+**Still not observed:** renumbering when positions get very close, and edit conflicts between two *different* users (B could only view; writes returned 401). See [E-session2-auth](evidence/E-session2-auth.md).
 
 ## Flowdeck decisions (INF)
 

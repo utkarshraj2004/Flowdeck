@@ -28,7 +28,9 @@
 | A logged-in non-member opening a workspace board sees "This board is private" with **Send request**; the admin gets a notification with a one-click approval. | [§10–11](evidence/E-session2-auth.md#11--sharing-invitations-membership-t5-and-the-blocker) |
 | Invite roles offered on the free plan: Member; Observer shown as an upgrade. Link invites: "join as member" / "join as observer (upgrade)". | same |
 | Free workspace collaborator cap shown as "1 / 10". | [§1](evidence/E-session2-auth.md#1--accounts-onboarding-workspaces) |
-| **Not verified (blocked):** every role cell needing User B as member, observer or guest. All four ways of adding B failed silently on Trello's side (§11). | — |
+| **Logged-in public viewer (non-member) on a public board:** read-only board and card back; no composers, no drag, no comment box (commenting = Members); list menu = Watch only; card actions = Copy, Mirror, Watch, Share; board menu without Share/Settings/background/Close. Can **watch** cards and receives watcher notifications. Writes through the API are refused with **401 "unauthorized card permission requested"**, so the server enforces it, not just the UI. | [E-session2-auth §14](evidence/E-session2-auth.md#14--cross-user-round-owners-manual-step-2026-10-11-1945-2000-utc) |
+| @mention of a non-member on a public board: not suggested by autocomplete and **does not notify** them (consistent with DOC D22). | same |
+| **Not verified (blocked):** member, observer and guest rows with a second user. B was verified not to be a member; the owner's manual step changed the board to Public instead. | — |
 
 ## Flowdeck model (INF)
 
@@ -56,7 +58,7 @@ Roles:
 
 Legend: ✓ allowed · ✗ denied · P = depends on board pref.
 
-| Action | Board admin | Board member | Observer | WS viewer (workspace-visible board, not joined) | Public viewer |
+| Action | Board admin | Board member | Observer | WS viewer (workspace-visible board, not joined) | Public viewer (OBS O05 for logged-in viewers) |
 |---|:-:|:-:|:-:|:-:|:-:|
 | View board, cards, attachments | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Join board (self-join) | — | — | — | P `selfJoin` | ✗ |
