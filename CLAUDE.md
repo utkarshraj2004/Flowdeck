@@ -8,6 +8,7 @@ Static website (plain HTML/CSS/JS). No backend, database, framework, build step,
 - `scripts/browser-check.mjs` – Chromium (Playwright) check of nav, CSS, JS, mobile layout.
 - `.github/workflows/ci.yml` – validation on PRs and pushes to `main`.
 - `.github/workflows/deploy-pages.yml` – manual GitHub Pages deploy (re-runs validation first).
+- `research/` – Trello-equivalent product research and build specification (docs only; start at `research/README.md`).
 
 `site/` currently holds placeholder pages; replace them with real content.
 

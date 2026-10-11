@@ -1,0 +1,52 @@
+# 07 · Ordering, concurrency, persistence, attachments
+
+## What is known about Trello
+
+| Fact | Evidence |
+|---|---|
+| Positions are `top`, `bottom`, or a positive number; example default spacing `16384`. | API A01, OBS O01 |
+| Changes reach other open clients in well under a second via WebSockets, with polling fallback (historic description). | DOC D16 |
+| Archive is reversible; delete is permanent and only possible after archive. Deleting a list deletes its cards. No recovery after delete. | DOC D03, D21 |
+| Moving a card across boards keeps description, checklists, attachments and comments, **not** activity history, and drops members not on the target board. Labels may be dropped (open bug). | DOC D24, 3P T05 |
+| JSON export includes the 1000 most recent actions. | DOC D09 |
+
+**Not observed:** Trello's conflict resolution for two users editing the same description at once, renumbering behaviour when positions get close, and refresh/persistence timing. These need a test account (10 §Access).
+
+## Flowdeck decisions (INF)
+
+### Ordering
+- **Fractional indexing** with base-62 string keys (e.g. the `fractional-indexing` algorithm, CC0/MIT implementations). A new key is generated between neighbours, so a move updates exactly **one row**.
+- Server-authoritative: the client sends `{before|after|top|bottom}`, and the server computes the key inside the transaction, locking the neighbour rows (`SELECT … FOR UPDATE` on the list's open cards window) to avoid duplicate keys.
+- Collision guard: a unique index on `(list_id, position)` for open cards. On violation, retry once with a jittered key.
+- Key-length guard: if a key exceeds 50 chars, rebalance that list in one transaction and emit `list.reordered` with all positions.
+- Archived items keep their key. On restore, a card returns to its old key if that position is free, otherwise it goes to the bottom.
+
+### Concurrency
+| Situation | Rule |
+|---|---|
+| Two users move the same card | Last write wins on `list_id`/`position`. Both see the final state via `seq`-ordered events. No 409 for moves (moves are not `If-Match` gated). |
+| Two users edit the same scalar field (name, due) | `If-Match` version check → 409 with current value. The client shows "Updated by X — reload / overwrite". |
+| Description editing | Per-field version. When a 409 arrives while editing, the client shows a 3-way diff (base / theirs / mine) and lets the user pick. Later: CRDT (Yjs) collaborative editing. |
+| Checklist toggles, label/member add-remove | Set semantics (idempotent add/remove), no conflict. |
+| Card archived/deleted while another user has it open | Event updates the open modal (02 Conflict state); further edits get `404` or `409 archived`. |
+| List archived while someone adds a card to it | Reject with `409 list_archived`. |
+| Cross-board move while the target board is closed | Reject with `409 board_closed`. |
+
+### Persistence and durability
+- Every mutation is one Postgres transaction: row change + `activity` row (with `seq`) + notification fan-out rows. Realtime events publish **after commit** only.
+- Optimistic UI: apply locally, roll back on error, retry idempotently (same `Idempotency-Key`) up to 3 times on network failure.
+- Refresh behaviour: `GET /boards/:id` is the source of truth. The client cache is memory-only (no offline writes in MVP).
+- Timestamps in UTC. Display in the user's timezone pref, falling back to the browser's (OBS O01: the timezone may be null).
+
+### Attachments
+| Requirement | Decision |
+|---|---|
+| Storage | Local filesystem volume by default (`/data/blobs/ab/cd/<sha256>`); S3-compatible backend optional (MinIO etc.). Content-addressed and deduplicated by SHA-256. |
+| Size | Default 25 MB per file, configurable (Trello: 10 MB free / 250 MB paid per 3P T02). Enforced while streaming (no full buffering); 413 when exceeded. |
+| Types | All types allowed. Served with `Content-Disposition: attachment` except images/PDF previews; `X-Content-Type-Options: nosniff`. SVG never served inline. |
+| Previews | Server generates thumbnails (≤400 px WebP) for images; covers use the thumbnail. |
+| Links | `kind=link` attachments store the URL only, with no server-side fetch in MVP (avoids SSRF). |
+| Scanning | Optional ClamAV sidecar; `scan_status` gates downloads when enabled (OBS: Trello exposes `isMalicious`). |
+| Access | Download URLs go through the API with an auth check. No public blob URLs. Public boards (later) use signed, expiring URLs. |
+| Deletion | Remove attachment row → decrement `ref_count` → a GC job deletes the blob when the count is 0 and the blob is older than 24 h (so backups taken in that window stay consistent). |
+| Quotas | Per-instance storage usage shown in admin, optional per-workspace quota. |

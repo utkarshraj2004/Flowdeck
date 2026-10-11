@@ -1,0 +1,113 @@
+# 03 · User journeys and acceptance criteria
+
+Each journey has an ID (J##) and numbered acceptance criteria (AC). Tests in `09-test-plan.md` reference them as `J##.AC#`. The **Ref** column gives the Trello evidence a journey is modelled on. Flowdeck-specific values (lengths, messages) are INF.
+
+Gherkin shorthand: **G** given, **W** when, **T** then.
+
+---
+
+## J01 · First admin sets up the instance  (Ref: INF)
+1. G a fresh install, W the operator runs `flowdeck admin create --email a@x`, T a one-time setup link is printed and expires in 24 h.
+2. W the admin opens the link and sets name, username and password (≥12 chars), T they are logged in and a default workspace "<Name>'s workspace" exists with them as admin (OBS O01 default workspace).
+3. T no account with a default or blank password ever exists.
+
+## J02 · Invite and join a workspace  (Ref: DOC D11)
+1. G a workspace admin, W they invite `b@x` as member, T an invite with a 7-day expiry is created and emailed if SMTP is configured; the copyable link is always shown.
+2. W B opens the link while logged out, T they can create an account; after submit they are a workspace **member**.
+3. W an admin creates an invite link, T anyone with the link joins as member until it is revoked; after revocation, opening it shows "This invite is no longer valid".
+4. G a workspace member without invite rights, T the invite button is absent and `POST /workspaces/:id/invites` returns 403.
+5. W an admin demotes the last admin, T the server returns `409 last_admin` and the UI explains it.
+
+## J03 · Log in / log out / reset password  (Ref: INF; D19 SSO later)
+1. Wrong password → generic "Email or password is incorrect" (no account enumeration). The 6th failure within 1 min returns 429.
+2. Logout invalidates the session server-side; the back button doesn't show board data.
+3. Reset sends a single-use token valid 1 h; using it signs out all other sessions.
+
+## J04 · Create a board  (Ref: OBS O01, API A01, DOC D18)
+1. W a member submits name "Q4 Roadmap" with visibility Workspace, T the board opens empty with the "Add a list" composer focused; the creator is board admin.
+2. Name is required: empty or whitespace-only is rejected inline; more than 200 chars is rejected.
+3. Default visibility is the workspace setting (default `workspace`); private boards are visible only to board members.
+4. W copying a board with "keep cards" unchecked, T lists and labels are copied, cards are not; the new board has a new short URL.
+
+## J05 · Board navigation  (Ref: DOC D04, INF)
+1. Pressing `b` opens the board switcher with type-to-filter; `Enter` opens the board.
+2. Starred boards appear first on Home and in the switcher, in the user's star order.
+3. A board URL `/b/<shortId>/<slug>` resolves even if the slug is stale (it redirects to the current slug).
+4. Opening a board without access shows 404 (no existence leak), plus "Request access" if the board is workspace-visible (later).
+
+## J06 · Lists: create, rename, reorder, move, copy, archive, restore, delete  (Ref: API A01, DOC D03, D24)
+1. Adding a list appends it at the end; `Enter` keeps the composer open for the next list; `Esc` closes it.
+2. Renaming is inline; blank names revert.
+3. Dragging a list to a new slot persists after reload and reaches other open clients within 1 s (p95).
+4. "Move list" to another board puts it at the chosen position. Its cards move with it; card members not on the target board are removed and logged.
+5. Archiving a list hides it and its cards; it appears under Board menu → Archived items → Lists, with "Send to board" restoring it to its previous position.
+6. **Delete** is available only for archived lists, asks for confirmation ("deletes N cards, can't be undone"), and is permanent (DOC D03).
+7. "Archive all cards in this list" archives every open card in one action and one activity entry.
+
+## J07 · Cards: create, edit, reorder, move, copy, archive, restore, delete  (Ref: API A01, DOC D24, D25, D03)
+1. "Add a card" at the bottom of a list creates a card with the typed title; `Enter` creates and keeps the composer open; titles are 1–512 chars after trimming.
+2. Dragging a card within or across lists persists exactly where it was dropped, verified after reload and on a second client.
+3. The keyboard alternative: focus the card, press `Space`, use arrow keys, press `Enter`. It produces the same result, and screen readers announce "Moved to <list>, position n of m".
+4. The Move dialog offers board → list → position. A cross-board move keeps description, checklists, attachments and comments (DOC D24), drops non-member assignees, and maps labels by matching name+colour or creates the missing labels on the target board (INF; avoids Trello's dropped-label bug, 3P T05).
+5. The Copy dialog offers title plus "keep" checkboxes (checklists, labels, members, attachments, comments). The copy gets activity "copied from <card>".
+6. Archive removes the card from the list; the card URL still opens with an "archived" banner; Restore returns it.
+7. Delete is offered only for archived cards, needs confirmation, and is permanent.
+8. Marking a card complete shows a completed state on the due badge; it is independent of archive.
+
+## J08 · Card details  (Ref: DOC D10, D17, D22, D26; OBS O01)
+1. **Description:** Markdown editor with preview; saves on blur/`Ctrl+Enter`; `Esc` cancels with an unsaved-changes prompt; ≤16384 chars. A concurrent edit triggers the 3-way prompt (07).
+2. **Labels:** pick from board labels, create a label (name optional, colour from 30 + none); colour-blind mode adds patterns on all labels.
+3. **Members:** only board members can be assigned; `Space` on a focused card toggles self-assignment.
+4. **Dates:** optional start, due date + time, reminder (later). The badge is neutral when > 24 h away, warning when < 24 h, danger when overdue, success when complete (colour + text, never colour alone; DOC D10 colour logic).
+5. **Checklists:** add multiple; add, rename, reorder, check and delete items; the card front shows "n/m"; "hide checked items" toggle.
+6. **Comments:** Markdown, `@username` mentions notify the mentioned user if they can see the board; `@card` notifies card members; `@board` notifies board members. Authors can edit (marked "edited") and delete their own; board admins can delete non-admins' comments (DOC D22).
+7. **Attachments:** upload by picker, drag-drop onto the card, or paste; add a link; image uploads offer "Make cover"; > limit → "File is larger than N MB".
+8. **Cover:** colour or image; on the card front it's shown above the title.
+9. **Activity:** chronological feed of all changes with actor and time; "Show details" toggles non-comment activity.
+
+## J09 · Board filter and global search  (Ref: DOC D04, D05)
+1. `f` opens the filter: keyword, members (incl. "no members"), labels, due (overdue, next day/week/month, no dates), complete/incomplete. Non-matching cards are hidden (not dimmed); list headers show "n of m"; `x` clears.
+2. Global search returns cards across boards the user can access, with highlighted terms. Operators behave per 06; unknown operators are treated as text.
+3. Archived cards appear only with `is:archived`.
+
+## J10 · Notifications and watching  (Ref: DOC D12)
+1. Users are auto-subscribed to cards they create, are assigned to, or comment on (INF).
+2. Watching a board/list notifies on new cards; watching a card notifies on comments, due changes, completion, attachments, moves and archive.
+3. The bell shows an unread count, updated in real time; "Mark all read" works.
+4. No notification is generated for the actor's own action.
+
+## J11 · Real-time collaboration  (Ref: DOC D16)
+1. Two browsers on the same board: any create/move/edit/archive in A appears in B within 1 s (p95) without reload.
+2. Kill B's network for 30 s while A makes 10 changes; on reconnect B shows all 10 with no duplicates (catch-up by `seq`).
+3. Exceeding the replay window triggers a full snapshot reload, keeping the scroll position.
+4. Removing B from a private board makes B's view switch to "You no longer have access" within 2 s.
+
+## J12 · Permissions in practice  (Ref: 04)
+1. An observer sees the board, can comment if the pref allows, and cannot drag cards (drag handles absent; API 403).
+2. A guest sees only the boards they were added to; workspace pages show only those boards.
+3. Board prefs `comments`, `invitations` and `selfJoin` take effect immediately for all users.
+
+## J13 · Close, reopen, delete board  (Ref: DOC D21)
+1. A board admin closes the board; it disappears from Home and is listed under "Closed boards"; the board is read-only if opened.
+2. Reopen restores it to its workspace.
+3. Delete is available only for closed boards to admins, needs the typed board name, is permanent, and removes blobs via GC.
+
+## J14 · Export and import  (Ref: DOC D09)
+1. Any board member exports JSON containing board, lists, cards, labels, checklists, comments, members (id, username, name only) and the full activity history (Flowdeck exports **all** activity, unlike Trello's 1000 most recent; INF).
+2. **Later:** import a Trello JSON export into a new Flowdeck board, mapping lists, cards, labels, checklists, comments (as imported text with the original author name) and due dates. Unknown members map to "Imported user" placeholders.
+
+## J15 · Mobile and touch  (Ref: INF; Trello mobile not observed)
+1. At 375 px width a board shows one list at a time at ~85 % width, swipeable horizontally; the page body has no horizontal scroll.
+2. Long-press picks up a card; dropping on a list edge auto-scrolls to the next list.
+3. Card detail opens full-screen with a sticky header and close button; all actions are reachable without hover.
+4. Tap targets are ≥ 44×44 px.
+
+## J16 · Accessibility  (Ref: WCAG 2.2 AA; INF)
+1. Every journey above is completable with keyboard only.
+2. Axe-core reports zero serious/critical violations on S04, S06, S10, S17, S19.
+3. Colour contrast ≥ 4.5:1 for text on every built-in board background.
+
+## J17 · Self-hosting operations  (Ref: 08)
+1. `docker compose up -d` on a clean host reaches `/readyz` 200 within 60 s.
+2. Daily backup produces a DB dump, blob snapshot and manifest; restore onto a fresh host yields identical board exports (byte-equal JSON aside from timestamps).
+3. Upgrading N → N+1 auto-runs migrations and keeps all data; starting an older binary against a newer DB refuses with a clear message.
