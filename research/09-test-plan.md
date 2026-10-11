@@ -90,20 +90,19 @@ One test per (role × action) cell in `04-permissions.md` over the API, plus an 
 | T9 | Keyboard shortcut list at `trello.com/shortcuts` | 01 §6 |
 | T10 | Empty, loading, offline and error states | 02 |
 
-### T status after session 2 (2026-10-11)
+### T status after session 2 (2026-10-11, final)
 
-Both test-account logins stopped at Atlassian's new-device email verification ([E-session2](evidence/E-session2.md#login-attempt-blocked-by-email-verification)), so nothing that needs an account was observed.
+Both test accounts logged in after the owner entered the emailed codes. A synthetic workspace and board were used. User B **could not be added** to any board or workspace (four supported routes failed silently on Trello's side), so cross-user checks were replaced by same-user two-tab checks where possible.
 
 | ID | Status | Evidence |
 |---|---|---|
-| T1 | **Partial**: logged-out desktop and phone layout observed (session 1). Logged-in board (composers, badges on own cards) not observed | [E-trello-public](evidence/E-trello-public.md) |
-| T2 | **Not observed** (needs login) | — |
-| T3 | **Not observed** (needs two logged-in users) | — |
-| T4 | **Partial**: two WebSockets (`/1/Session/socket`, `/gateway/api/graphql/subscriptions`), JSON frames, reconnect ≈4 s / ≈19 s after a 15 s outage. Two-user latency not measured | [E-session2 §T4](evidence/E-session2.md#t4-partial--websocket-lifecycle-and-reconnect-obs-o04-logged-out-public-board) |
-| T5 | **Docs only** (DOC-direct D01, D02, D11). Not exercised with the second account | [E-session2 §docs](evidence/E-session2.md#official-documentation-read-directly-doc-direct) |
-| T6 | **Docs only**: upload limit 10 MB free / 250 MB paid (D30). Validation copy not observed | same |
-| T7 | **Docs only**: archive-before-delete, "Switch to lists" → "Send to board", "Restore", confirmation click (D03, D29). Wording and restore position not observed | same |
-| T8 | **Docs only**: trigger list and frequency options (D12). Default frequency still unknown | same |
-| T9 | **Done** (OBS O04): full shortcut list captured | [E-session2 §T9](evidence/E-session2.md#t9--keyboard-shortcuts-obs-o04-trellocomshortcuts-logged-out) |
-| T10 | **Partial** (OBS O04): skeleton loading, offline toast, offline reload, not-found → "Sign up to see this board". Logged-in empty/error states not observed | [E-session2 §T10](evidence/E-session2.md#t10--loading-offline-and-error-states-obs-o04-logged-out) |
-
+| T1 | **Done**: desktop 1280 px and phone 375 px, logged in; card-front badge order recorded | [E-session2-auth §4, §13](evidence/E-session2-auth.md#4--cards-creation-validation-ordering) |
+| T2 | **Mostly done**: mouse drag of cards and lists (placeholder, faded source, target outline) and keyboard moves; persistence after reload. **Touch long-press not reproducible** in emulation. Auto-scroll near edges not measured | [§7](evidence/E-session2-auth.md#7--drag-and-drop-and-keyboard-moves-t2) |
+| T3 | **Partial (same user, two tabs)**: last write wins, no warning. Two different users not possible | [§9](evidence/E-session2-auth.md#9--real-time-and-concurrency-t3-t4-with-the-same-user-in-two-tabs) |
+| T4 | **Partial**: same-user fan-out 0.44–1.0 s; socket reconnect timing (logged out, O04). Cross-user latency not possible | [§9](evidence/E-session2-auth.md#9--real-time-and-concurrency-t3-t4-with-the-same-user-in-two-tabs), [E-session2 §T4](evidence/E-session2.md#t4-partial--websocket-lifecycle-and-reconnect-obs-o04-logged-out-public-board) |
+| T5 | **Blocked**: the non-member "private · Send request" flow, notification and Share/role UI were observed, but B could never become a member, observer or guest | [§11](evidence/E-session2-auth.md#11--sharing-invitations-membership-t5-and-the-blocker) |
+| T6 | **Done**: required fields (workspace name + type, board title), card title limit 16384 (silent), list name empty, upload limit 10 MiB with message | [§4, §5](evidence/E-session2-auth.md#5--card-detail-dialog) |
+| T7 | **Done**: Archived items panel (cards and lists), restore to original position, card/checklist/comment delete wording, list-archive confirmation, undo with `z` | [§6](evidence/E-session2-auth.md#6--archive-restore-delete-undo-t7) |
+| T8 | **Partial**: email frequency default = Periodically (hourly); join-request notification observed; trigger list for another user's actions blocked (needs B) | [§12](evidence/E-session2-auth.md#12--notifications-and-email-settings-t8-partial) |
+| T9 | **Done** (O04) | [E-session2 §T9](evidence/E-session2.md#t9--keyboard-shortcuts-obs-o04-trellocomshortcuts-logged-out) |
+| T10 | **Done**: loading skeleton, offline (logged out and in), not-found (logged out and in), no-access, empty states, error toasts | [§10](evidence/E-session2-auth.md#10--offline-errors-empty-and-not-found-states-t10) |

@@ -51,6 +51,7 @@ Collected 2026-10-11. **DOC** sources were read through web-search summaries tha
 |---|---|
 | O02 | REA 6.4.0 + Chromium 141 probe of trello.com: blocked (`ERR_TUNNEL_CONNECTION_FAILED`, egress 403). [E-REA.md](E-REA.md) |
 | O03 | Live logged-out observation of trello.com and the public board `/b/nC8QJJoZ` with Chromium + REA 6.4.0. [E-trello-public.md](E-trello-public.md) |
+| O05 | Session 2, **authenticated** with the two test accounts: synthetic workspace/board; boards, lists, cards, card back, labels, dates, checklists, comments, attachments, archive/restore/delete, drag-and-drop, search, filter, same-user real-time and concurrency, offline, not-found, sharing/invitation attempts, settings, mobile. [E-session2-auth.md](E-session2-auth.md) |
 | O04 | Session 2: login attempt (stopped at Atlassian email verification), `trello.com/shortcuts`, logged-out loading/offline/not-found states, WebSocket reconnect timeline, REA 6.4.0 reinstall. [E-session2.md](E-session2.md) |
 | O01 | Trello connector tool schemas and read-only responses (workspace list, board list metadata, member profile shape). [E-connector.md](E-connector.md) |
 

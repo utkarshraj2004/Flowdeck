@@ -121,6 +121,9 @@ Pages fetched from `support.atlassian.com` / `developer.atlassian.com` (HTTP 200
 
 ## What is needed to continue
 
+**Resolved later the same session:** the owner supplied the two emailed codes and both accounts logged in. See [E-session2-auth.md](E-session2-auth.md). The options below are kept for future sessions (each new device asks for a code again).
+
+
 The rest of T1–T8 needs a logged-in session. Atlassian requires an emailed one-time code for each test account on this new headless device. These are the supported manual routes, best first:
 
 1. **Enter the emailed codes into this session.** When you are ready, tell me. I will click **Resend email** once per account, and you reply with the two codes. They are single-use and expire within minutes; I type them only into the Atlassian form and never write them anywhere. The two browser profiles stay signed in for the rest of this session.

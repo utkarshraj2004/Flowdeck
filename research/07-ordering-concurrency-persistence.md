@@ -10,7 +10,13 @@
 | Moving a card across boards keeps description, checklists, attachments and comments, **not** activity history, and drops members not on the target board. Labels may be dropped (open bug). | DOC-direct D24, 3P T05 (labels not mentioned by D24) |
 | JSON export includes the 1000 most recent actions. | DOC D09 |
 
-**Not observed:** Trello's conflict resolution for two users editing the same description at once, renumbering behaviour when positions get close, and refresh/persistence timing. These need a test account (10 §Access).
+| **Observed positions:** first item at 140737488355328 (2⁴⁷), then +16384 (2¹⁴); a move takes the midpoint of its neighbours; moving to the front uses first − 16384. | OBS O05 (API read with the test account's own session) |
+| **Restore returns the card/list to its original position.** | OBS O05 |
+| **Concurrent description edit: last write wins, no warning;** the other client's open draft is not replaced. | OBS O05 (same user, two tabs) |
+| Edits made offline are not queued (toast "changes will not be saved"; the composer does nothing). | OBS O05 |
+| Card title limit 16384 (silently refused above); upload limit 10 MiB on free (client-side check). | OBS O05 |
+
+**Still not observed:** renumbering when positions get very close, and conflict outcomes for two *different* users (only same-user two tabs were possible). See [E-session2-auth](evidence/E-session2-auth.md).
 
 ## Flowdeck decisions (INF)
 

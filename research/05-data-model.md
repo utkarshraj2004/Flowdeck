@@ -2,6 +2,9 @@
 
 All of this is **INF (Flowdeck design)**. Trello evidence that shaped it is cited inline. Target store: **PostgreSQL 16+**. IDs are UUIDv7 (time-sortable, URL-safe), plus an 8-char `short_id` for board/card URLs (mirrors Trello's short links, OBS O01).
 
+**Trello observations that shape this model (OBS O05, [E-session2-auth](evidence/E-session2-auth.md)):** cards carry a per-board sequence number (`idShort`) shown in card URLs (`/c/<shortLink>/<n>-<slug>`); positions are numbers (start 2⁴⁷, step 2¹⁴, midpoint on move); descriptions are stored as Markdown; a new board has 6 untitled labels and 3 lists; free-plan uploads ≤ 10 MiB; card titles ≤ 16384; new accounts default to hourly email digests.
+**Flowdeck decisions from them (INF):** add `cards.number` (per-board sequence, unique `(board_id, number)`) and use `/c/<short_id>/<number>-<slug>`; keep fractional string keys (07) instead of numbers; seed 6 colour labels + optional To Do/Doing/Done on board creation; `prefs.emailDigest` default `periodic`.
+
 ## Entity relationships
 
 ```mermaid

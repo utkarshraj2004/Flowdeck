@@ -111,3 +111,32 @@ Gherkin shorthand: **G** given, **W** when, **T** then.
 1. `docker compose up -d` on a clean host reaches `/readyz` 200 within 60 s.
 2. Daily backup produces a DB dump, blob snapshot and manifest; restore onto a fresh host yields identical board exports (byte-equal JSON aside from timestamps).
 3. Upgrading N → N+1 auto-runs migrations and keeps all data; starting an older binary against a newer DB refuses with a clear message.
+
+## Parity notes from authenticated observation (OBS O05)
+
+These refine the acceptance criteria above. Source: [E-session2-auth](evidence/E-session2-auth.md). Where Flowdeck deliberately differs, it says so.
+
+| Journey | Trello (observed) | Flowdeck acceptance criterion |
+|---|---|---|
+| J02 | Workspace creation asks for name + type (type list) + optional description; Continue disabled until both set; no invite step | Type is **optional** in Flowdeck (no marketing segmentation); name required |
+| J04.1 | New board has To Do / Doing / Done and the composer open in the first list | W "default lists" is on (default), T the board opens with three lists and the first composer focused |
+| J04.2 | Empty title disables Create, hint "Board title is required" | Same |
+| J06.1 | List composer stays open after Enter; empty Enter is ignored | Same |
+| J06.5 | List archive asks "Are you sure?"; restore from Archived items → Lists → **Restore**; returns to original position | Same; restore to previous position if free, else end |
+| J06.6 | No delete button was shown for archived lists in this UI (DOC D03 describes one) | Keep Flowdeck's delete for archived lists (admin only), with confirmation |
+| J07.1 | Title limit 16384, over-limit silently refused; empty Enter closes the composer | Limit 512 (INF), **inline error** when exceeded; empty Enter closes |
+| J07.2 | Mouse drag within/across lists persisted after reload | Same, plus the second-client check |
+| J07.3 | Hover + `.`/`,` (bottom of next/prev list), `>`/`<` (top) | Add the same shortcuts in addition to the accessible Space/arrows flow |
+| J07.5 | Copy dialog: name + Keep (checklists, labels, members, attachments, comments, with counts), destination board/list/position; **checked items reset** on copy | Same; document that copied checklist items start unchecked |
+| J07.6 | Archived card opens with a banner, add buttons hidden, actions Restore/Delete; toast "Card archived — press Z to undo"; `z` undoes | Same, with undo for archive, move and label/member toggles |
+| J07.7 | Delete confirmation states that activity is removed and there is no undo | Same meaning, Flowdeck wording |
+| J08.1 | WYSIWYG + Markdown shortcuts, stored Markdown; **last write wins with no warning** (T3) | Flowdeck keeps its 409 + 3-way prompt (07): **deliberately better than parity** |
+| J08.4 | Due defaults to tomorrow at the current time; reminder default "1 Day before"; recurring options derived from the date | Same defaults; recurring is Later |
+| J08.5 | Checklist default title "Checklist"; item composer focused; progress %; item actions Convert to card / Delete; delete confirmation | Same; "Convert to card" is Later |
+| J08.6 | Comment edit shows "(edited)"; delete asks for confirmation | Same |
+| J08.7 | Image upload becomes the cover automatically; Links and Files are grouped; over-limit is rejected client-side with an upgrade message | Auto-cover on first image (setting); limit error names the configured size |
+| J08.9 | Activity lacks description and label changes | Flowdeck logs them (INF; more useful for a team) |
+| J09 | Filter state in URL; `x` clears; search operators work on the results page | Same |
+| J10 | Default email frequency **Periodically (hourly)** on a fresh account | Default `periodic` when email is enabled |
+| J11 | Same-user two-tab fan-out 0.44–1.0 s (median ≈ 0.48 s) | p95 < 1 s on LAN (unchanged) |
+| J12 | Non-member opening a workspace board gets "private · Send request"; request appears as a notification for admins with a one-click approve | Same flow (Later); approval must actually add the member and show an error if it can't |

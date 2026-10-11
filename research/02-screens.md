@@ -54,7 +54,10 @@
 | Stale | On reconnect, refetch board snapshot (06). |
 | Archived card opened by URL | Banner "This card is archived" with Restore (if allowed) and Delete. DOC D03 |
 
-## Drag-and-drop and touch (INF; Trello behaviour not observed)
+## Drag-and-drop and touch (INF; Trello mouse behaviour observed in O05, touch not)
+
+**Trello (OBS O05, [E-session2-auth §7](evidence/E-session2-auth.md#7--drag-and-drop-and-keyboard-moves-t2)):** native HTML5 drag; the source card stays in place, faded; the target list gets a blue outline and a grey placeholder the height of the card; drops persist after reload. Hover + `.`/`,` moves a card to the bottom of the next/previous list, and `>`/`<` to the top. Touch drag was not reproducible in emulation.
+
 
 - Pointer: drag cards between lists and positions; drag lists horizontally. Placeholder shows target slot; auto-scroll near edges.
 - Touch: long-press 300 ms to pick up; board scrolls horizontally with one-finger pan when not dragging.
@@ -67,3 +70,24 @@ WCAG 2.2 AA: 4.5:1 text contrast on every board background (scrim behind list he
 ## Branding (INF)
 
 Original name, logo, palette, icon set (e.g. Lucide, ISC licence) and illustrations. Do not use Trello's blue, logo shapes, "Butler", "Power-Up", or "card back" as UI copy.
+
+## Observed Trello screens and states (OBS O05)
+
+Source: [E-session2-auth](evidence/E-session2-auth.md). Flowdeck copies **structure and behaviour**, never wording or artwork; it writes its own copy.
+
+| Area | Trello behaviour observed | Flowdeck decision (INF) |
+|---|---|---|
+| Create board | Popover: background, title (required, inline hint), workspace, visibility (default Workspace, with a one-line explanation per option) | Same fields; default visibility from workspace setting |
+| New board | Starts with three lists (To Do / Doing / Done) and the first list's composer open | Offer "Start with To Do / Doing / Done" checkbox, default **on** |
+| Card composer | Enter adds and keeps the composer focused; empty/whitespace Enter closes it; over-length titles are **silently** refused | Keep the rapid-entry behaviour; show an inline error instead of silently refusing (better than parity) |
+| Card back | Two columns (desktop) → one column (phone, near full width); once populated, Members / Labels / Due date become sections and the button row shrinks; cover banner on top | Same layout rules |
+| Description | WYSIWYG with Markdown shortcuts; stored as Markdown; "View Markdown" toggle; Save / Cancel / Formatting help | Same: CommonMark storage, rich editor with Markdown input rules and a source toggle |
+| Labels on card front | Thin unnamed bars; `;` or a click toggles names; colourless labels hidden on the front | Same |
+| Due badge | Neutral > 24 h, yellow "Due soon" < 24 h, red overdue, pink > 24 h overdue, green complete | Same states, own palette, text never colour-only |
+| Destructive confirmations | Card delete, checklist delete, comment delete and **list archive** confirm; card archive does **not** confirm but shows an undo toast ("press Z") | Same pattern: confirm permanent actions; archive = undo toast |
+| Toasts | Bottom-left, stacking, persistent until closed: archive + undo, upload-limit error, "couldn't add you to the card", offline | Same placement; auto-dismiss non-errors after 8 s (INF) |
+| Offline | Toast "offline, changes will not be saved"; edit affordances do nothing; no queue | Same for MVP (no offline queue) |
+| Not found / no access | Logged in: "Board not found…" differs from "This board is private · Send request" (existence is revealed). Logged out: identical page for both | **Flowdeck: identical 404 for missing and no-access** to non-members; "Request access" only for workspace members on workspace-visible boards |
+| Search | `/` focuses header search; live dropdown (cards, boards); Advanced search page with filters and saved searches | MVP: header search + results page; saved searches later |
+| Filter | Keyword/members/labels/due/activity; header shows match count and "Clear all"; `x` clears; state in URL and per-user local storage | Same; state in URL query |
+| Mobile | Compact header; lists stay 272 px with the next one peeking; icon-only bottom bar | Same widths; no app-promo interstitial |

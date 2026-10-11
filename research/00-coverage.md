@@ -13,49 +13,49 @@
 | 3 | Two-step verification | D20 | DOC | — | Later | Yes |
 | 4 | Onboarding (default workspace) | O01 | DOC+OBS | Trello onboarding screens not seen | Ready (FD) | Yes |
 | 5 | Profile and account settings | A01, D04, D26 | API | Settings layout | Ready | Yes |
-| 6 | Workspaces (create, settings) | A01, O01 | DOC+OBS | — | Ready | Yes |
+| 6 | Workspaces (create, settings) | A01, O01, O05 | OBS | — | Ready | Yes |
 | 7 | Workspace roles (admin / member / guest) | D01, D02, D11 | DOC-direct | Normal member's rights on workspace-visible boards not joined | Ready (FD) | Yes |
 | 8 | Invitations (email, link, revoke) | D11 | DOC | Link expiry behaviour; who can invite on paid plans | Ready (FD) | Yes |
-| 9 | Board create / copy | A01, O01, O03 *(+O03)* | DOC+OBS | Create-dialog layout | Ready | Yes |
-| 10 | Board visibility (private / workspace / public) | O01, A01 | DOC+OBS | Public-board link behaviour | Ready (public: Later) | Yes |
-| 11 | Board settings (comments, invites, self-join, covers, counts, voting) | O01, A01 | DOC+OBS | — | Ready | Yes |
+| 9 | Board create / copy | A01, O01, O03, O05 | OBS (create) | Copy-board dialog not opened | Ready | Yes |
+| 10 | Board visibility (private / workspace / public) | O01, A01, O05 | OBS | Public-board link behaviour | Ready (public: Later) | Yes |
+| 11 | Board settings (comments, invites, self-join, covers, counts, voting) | O01, A01, O05 | OBS | — | Ready | Yes |
 | 12 | Board navigation, starring, switcher | D04, A01, O03 *(+O03)* | DOC | UI not observed | Ready (FD) | Yes (stars) |
 | 13 | Board templates | D18, O01, T07 | DOC | What templates copy | Later | Yes |
 | 14 | Close / reopen / delete board | D21 | DOC | Reopen permission edge | Ready | Yes |
-| 15 | Lists: create, rename, reorder | A01, O01, O03 *(+O03)* | DOC+OBS | Position renumbering details | Ready | Yes |
+| 15 | Lists: create, rename, reorder | A01, O01, O05 | OBS | Renumbering when keys get close | Ready | Yes |
 | 16 | Lists: move to board, copy, move-all / archive-all cards | A01, D24 | DOC | — | Ready | Yes |
-| 17 | Lists: archive, restore, delete | D03, O01 | DOC-direct+OBS | Restore position rule | Ready | Yes |
-| 18 | Cards: create, edit title | A01 | API | Validation copy | Ready | Yes |
-| 19 | Cards: reorder, move (list / board) | A01, D24, T05 | Partial | Label behaviour on cross-board move (bug vs docs) | Ready (FD rule J07.4) | Yes |
-| 20 | Cards: copy with keep-options | D25, A01 | DOC | Exact option list | Ready | Yes |
-| 21 | Cards: archive, restore, delete | D29, O01 | DOC-direct+OBS | — | Ready | Yes |
-| 22 | Card complete state | D10, O01 | DOC+OBS | — | Ready | Yes |
-| 23 | Description (Markdown) | A01 | API | Trello's Markdown dialect | Ready (FD: CommonMark + GFM) | Yes |
-| 24 | Labels (30 colours + none, colour-blind patterns) | D26, O01, O03 *(+O03)* | DOC+OBS | Pattern artwork (Flowdeck draws its own) | Ready | Yes |
-| 25 | Card members | D24, A01 | DOC | — | Ready | Yes |
-| 26 | Start / due dates, badge states | D10 | DOC-direct | — (5 badge states documented) | Ready | Yes |
+| 17 | Lists: archive, restore, delete | D03, O05 | OBS (archive/restore) | Delete button not shown in the UI observed | Restore position rule | Ready | Yes |
+| 18 | Cards: create, edit title | A01, O05 | OBS | — | Ready | Yes |
+| 19 | Cards: reorder, move (list / board) | A01, D24, T05, O05 | OBS (within board) | Label behaviour on cross-board move (bug vs docs) | Ready (FD rule J07.4) | Yes |
+| 20 | Cards: copy with keep-options | D25, A01, O05 | OBS | — | Ready | Yes |
+| 21 | Cards: archive, restore, delete | D29, O05 | OBS | — | Ready | Yes |
+| 22 | Card complete state | D10, O01, O05 | DOC+OBS | — | Ready | Yes |
+| 23 | Description (Markdown) | A01, O05 | OBS (WYSIWYG, stored Markdown) | Exact dialect edge cases | Ready (FD: CommonMark + GFM) | Yes |
+| 24 | Labels (30 colours + none, colour-blind patterns) | D26, O05 | OBS | Pattern artwork (Flowdeck draws its own) | Ready | Yes |
+| 25 | Card members | D24, A01, O05 | OBS (self only) | Assigning another user (blocked) | Ready | Yes |
+| 26 | Start / due dates, badge states | D10, O05 | OBS | — (5 badge states documented) | Ready | Yes |
 | 27 | Due reminders | D10 | DOC | Needs email/notification worker | Later | Yes |
 | 28 | Recurring due dates | D10, O01 | Partial | Rules and limits | Later | Yes |
-| 29 | Checklists and items | A01, O01 | DOC+OBS | Item assignee/due UI | Ready (assignee/due: Later) | Yes |
-| 30 | Comments, mentions, edit/delete | D22 | DOC | — | Ready | Yes |
+| 29 | Checklists and items | A01, O05 | OBS | Item assignee/due UI | Ready (assignee/due: Later) | Yes |
+| 30 | Comments, mentions, edit/delete | D22, O05 | OBS (own comments) | Mentions of another user (blocked) | Ready | Yes |
 | 31 | Emoji reactions | D23 | DOC | Emoji set | Later | Yes |
-| 32 | Attachments (file, link) | A01, O01, D30, O03 | DOC-direct | Upload UI not observed | Ready (FD limits) | Yes (+ file store) |
-| 33 | Covers (colour / image) | A01, O01, O03 *(+O03)* | API | Cover sizes | Ready (FD) | Yes |
-| 34 | Card and board activity | O01, D22, O03 *(+O03)* | DOC+OBS | — | Ready | Yes |
+| 32 | Attachments (file, link) | A01, D30, O05 | OBS | — | Ready (FD limits) | Yes (+ file store) |
+| 33 | Covers (colour / image) | A01, O05 | OBS | Full-size cover not set | Ready (FD) | Yes |
+| 34 | Card and board activity | O01, D22, O05 | OBS | — | Ready | Yes |
 | 35 | Custom fields | D17, O01 | DOC+OBS | Plan tier (irrelevant) | Later | Yes |
 | 36 | Mirror cards | D13 | DOC | Sync semantics | Out | Yes |
-| 37 | Global search + operators | D05, O01 | Partial | Doc inconsistency (`has:member`); ranking | Ready (FD subset) | Yes |
-| 38 | Board filter | D04, O03 *(+O03)* | DOC | Filter UI options | Ready (FD) | No (client-side over loaded board) |
-| 39 | Notifications (in-app) and watching | D12 | DOC-direct | Trigger list documented; UI not observed | Ready | Yes |
-| 40 | Email notifications / digests | D12 | Partial | Options documented (never / hourly / instant); default not stated | Later | Yes (+ SMTP) |
+| 37 | Global search + operators | D05, O05 | OBS | Doc inconsistency (`has:member`); ranking | Ready (FD subset) | Yes |
+| 38 | Board filter | D04, O03, O05 | OBS | Filter UI options | Ready (FD) | No (client-side over loaded board) |
+| 39 | Notifications (in-app) and watching | D12, O05 | Partial (OBS drawer + join request) | Trigger list documented; UI not observed | Ready | Yes |
+| 40 | Email notifications / digests | D12, O05 | OBS (settings) | — (default Periodically) | Later | Yes (+ SMTP) |
 | 41 | Keyboard shortcuts | D04, O04 | OBS | — (full list observed) | Ready (FD set) | No |
-| 42 | Real-time updates | D16, D28, T06, O03, O04 | Partial (+OBS client sockets) | Two-user latency; payload semantics (not inspected) | Ready (FD contract, 06) | Yes |
-| 43 | Concurrent edits | — | Not inspected | Trello's conflict behaviour | Ready (FD rules, 07) | Yes |
-| 44 | Refresh / persistence | D16, O04 | Partial | Socket reconnect timing observed once (logged out); edit persistence not observed | Ready (FD) | Yes |
-| 45 | Mobile layout and touch | D27 (historic offline only), O03 *(+O03)* | Not inspected | All Trello mobile UI | Ready (FD, J15) | No (client) |
+| 42 | Real-time updates | D16, D28, T06, O03, O04, O05 | Partial (OBS same-user fan-out) | Two-user latency; payload semantics (not inspected) | Ready (FD contract, 06) | Yes |
+| 43 | Concurrent edits | O05 | Partial (OBS same user, last-write-wins) | Two different users | Ready (FD rules, 07) | Yes |
+| 44 | Refresh / persistence | D16, O04, O05 | OBS | — | Ready (FD) | Yes |
+| 45 | Mobile layout and touch | O03, O05 | Partial (OBS layout; touch drag not reproducible) | All Trello mobile UI | Ready (FD, J15) | No (client) |
 | 46 | Offline mobile editing | D27 | Partial (2016-17) | Current status | Out | Yes |
 | 47 | Accessibility | — | Not inspected | No Trello conformance statement found | Ready (FD WCAG 2.2 AA) | No (client) |
-| 48 | Empty / loading / error states | O04 | Partial (OBS logged out) | Logged-in empty/error states | Ready (FD, 02) | No (client) |
+| 48 | Empty / loading / error states | O04, O05 | OBS | — | Ready (FD, 02) | No (client) |
 | 49 | Views: Table, Calendar | D08, O03 *(+O03)* | DOC | Behaviour details | Later | Yes |
 | 50 | Views: Timeline, Dashboard, Map, Workspace views | D08, O03 *(+O03)* | DOC | — | Out / Later | Yes |
 | 51 | Inbox, Planner | D13 | DOC | — | Out | Yes |
@@ -70,6 +70,9 @@
 | 60 | Self-hosting, backup, restore, upgrade | — (Trello is SaaS) | N/A | — | Ready (FD, 08) | Yes |
 
 ## Summary
+
+**Session 2, authenticated ([E-session2-auth](evidence/E-session2-auth.md)):** with the test accounts logged in, **29 rows gained observed (OBS) evidence** (6, 9, 10, 11, 15, 17–26, 29, 30, 32–34, 37–40, 42–45, 48). The main remaining gaps are multi-user: roles and permissions for a second user (7, 8, 25, 30 mentions), cross-user real-time and conflicts (42, 43), and touch drag (45). These are blocked because Trello silently refused every way of adding User B. Readiness is unchanged: every MVP row was already buildable from Flowdeck decisions; parity details are now much firmer.
+
 
 **Session 2 (2026-10-11, [E-session2](evidence/E-session2.md)):** both test-account logins stopped at Atlassian's emailed verification code, so **no authenticated behaviour was observed**. Rows changed this session: 7, 17, 21, 26, 32, 39, 40, 41, 42, 44, 48. New evidence: full shortcut list (OBS), logged-out loading/offline/not-found states (OBS), the two client WebSockets and their reconnect timing (OBS), and eleven official pages read directly (DOC-direct). The original-pass counts below are kept for traceability. Session 2 alone: **1 feature fully observed** (41), **3 partially observed** (42, 44, 48), **7 upgraded to DOC-direct** (7, 17, 21, 26, 32, 39, plus 40 still Partial). Readiness counts are unchanged; no row moved to or from Ready.
 

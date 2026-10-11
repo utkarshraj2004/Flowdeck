@@ -19,6 +19,17 @@
 
 **Not verified (still, after session 2: login blocked, see [E-session2](evidence/E-session2.md)):** exact behaviour of a *normal* workspace member on a workspace-visible board they haven't joined (view only vs. edit); whether workspace normal members can create invite links on paid plans (DOC D11 gap).
 
+### Observed with the test accounts (OBS O05)
+
+| Fact | Evidence |
+|---|---|
+| Board visibility help text: Private = only board members see it, and **workspace admins can close the board or remove members**; Workspace = all workspace members can see **and edit**; Public = anyone can see, only members edit. | [E-session2-auth §2](evidence/E-session2-auth.md#2--boards) |
+| "Workspace editing" (self-join) is **on by default** for a Workspace board. Defaults `comments: members`, `invitations: members`. | same |
+| A logged-in non-member opening a workspace board sees "This board is private" with **Send request**; the admin gets a notification with a one-click approval. | [§10–11](evidence/E-session2-auth.md#11--sharing-invitations-membership-t5-and-the-blocker) |
+| Invite roles offered on the free plan: Member; Observer shown as an upgrade. Link invites: "join as member" / "join as observer (upgrade)". | same |
+| Free workspace collaborator cap shown as "1 / 10". | [§1](evidence/E-session2-auth.md#1--accounts-onboarding-workspaces) |
+| **Not verified (blocked):** every role cell needing User B as member, observer or guest. All four ways of adding B failed silently on Trello's side (§11). | — |
+
 ## Flowdeck model (INF)
 
 Flowdeck keeps Trello's shape but removes plan gating. Instance-level **system admin** is added for self-hosting.

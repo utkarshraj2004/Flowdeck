@@ -39,12 +39,13 @@ Parity checks T1–T10 in `09-test-plan.md`, plus these documentation conflicts:
 
 These items block **observed** evidence, not the build.
 
-**Status after session 2 (2026-10-11):** network access is **Full** and every Trello, Atlassian and CAPTCHA host is reachable. All four test-account variables are present. REA 6.4.0 is reinstalled and verified. **The only blocker:** Atlassian asked both test accounts for an **emailed verification code** (`id.atlassian.com/login/mfa`, "We've emailed you a code") on this new headless device. Per the owner's rule, both logins were stopped there. Supported ways forward, best first (details in [E-session2](evidence/E-session2.md#what-is-needed-to-continue)):
+**Status after session 2 (2026-10-11, final):** both test accounts logged in after the owner entered the emailed codes. The authenticated single-user investigation is complete ([E-session2-auth](evidence/E-session2-auth.md)). **Remaining blocker:** User B could not be added to User A's board or workspace. All four supported routes (approving the join request, sharing by email, invite link, workspace invite) failed silently on Trello's side, although both accounts are confirmed and unblocked. Options, best first:
 
-1. In a live session, the owner says "ready". Claude clicks **Resend email** once per account, and the owner replies with the two one-time codes. They are typed only into the Atlassian form and never stored.
-2. Enable authenticator-app two-step verification on both test accounts and provide the TOTP secrets as environment variables (e.g. `TRELLO_TEST_TOTP_SECRET`, `TRELLO_TEST2_TOTP_SECRET`). This is likely to replace the email challenge, but that is unverified.
+1. **Owner check from a normal browser:** log in as User A, open "FD Parity Board" → Share, invite User B, and see whether Trello shows an error that the headless session did not. If it works, the next session can run T3/T4/T5/T8 cross-user.
+2. Use **test accounts with non-relay email addresses**, or let the accounts age. Trello may limit new or relay-address accounts (unverified hypothesis).
+3. Accept the gap: build permissions from DOC-direct + Flowdeck rules (04), which is already specified.
 
-Once logged in, the remaining work is T1–T8 and T10 (logged in) in a dedicated synthetic workspace, as planned in `09-test-plan.md`.
+Each new login from a new device needs the emailed code again unless the accounts use authenticator-app 2SV (TOTP secrets as environment variables).
 
 ### Earlier status (session 1, kept for history)
 
