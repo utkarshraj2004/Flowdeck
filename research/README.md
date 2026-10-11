@@ -23,6 +23,7 @@ Flowdeck will be an **independent, self-hosted kanban tool** for a small team. T
 | — | [evidence/E-API-surface.md](evidence/E-API-surface.md) | Derived inventory of Trello's documented REST API (324 operations) |
 | — | [evidence/E-connector.md](evidence/E-connector.md) | What the authorized Trello connector exposed (schemas, enums, account shape) |
 | — | [evidence/E-REA.md](evidence/E-REA.md) | REA install, tool verification, Trello reachability probe + screenshots |
+| — | [HANDOFF.md](HANDOFF.md) | **Pause/resume notes**: branch, PRs, T1–T10 status, blocker, exact resume steps |
 | — | [evidence/E-session2-auth.md](evidence/E-session2-auth.md) | **Session 2, authenticated** (test accounts, synthetic workspace): full board/list/card/card-back behaviour, T1–T10 results, the User B invitation blocker |
 | — | [evidence/E-session2.md](evidence/E-session2.md) | **Session 2**: login attempt (stopped at Atlassian email verification), full shortcut list, logged-out loading/offline/not-found states, WebSocket reconnect timeline, official docs read directly |
 | — | [evidence/E-trello-public.md](evidence/E-trello-public.md) | **Live Trello observations** (logged out, public board): layout, card dialog, filter, menu, views, phone; REA results; blocked login hosts |
