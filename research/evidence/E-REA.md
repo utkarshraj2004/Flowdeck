@@ -48,7 +48,11 @@ Not tested: `capture-browser-scenario`, `compare-web-captures`, `compare-web-scr
 
 **Conclusion:** REA works in this environment. Trello cannot be investigated with it until the environment's network policy allows Trello and Atlassian hosts. Nothing was bypassed; no proxy or TLS settings were altered.
 
-## Unblock and resume
+## Update after allowlist change (same day, ~17:25 UTC)
+
+`trello.com` and Atlassian hosts now load. REA `inspect-web-page`, `capture-web-screenshot`, `analyze-web-bundle` and `observe-web-session` all succeed on `https://trello.com/` and a public board. `target_not_allowed` does not occur on a loaded page; it was caused by Chrome's error page. One host family still blocks login: `*.atl-paas.net`. Full results: [E-trello-public.md](E-trello-public.md).
+
+## Unblock and resume (original notes)
 
 1. Allow these hosts in the environment's network settings: `trello.com`, `*.trello.com`, `id.atlassian.com`, `*.atlassian.com`, plus any asset/CDN hosts the login page needs (unknown until the first page loads; REA's `inspect-web-page` resource list will name them, likely including Atlassian's `*.atl-paas.net`).
 2. Create a **dedicated Trello test account** (not your real one) with its own empty workspace, ideally plus a second test account for permission and collaboration checks.

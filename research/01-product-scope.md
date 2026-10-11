@@ -86,6 +86,18 @@ Tiers: **MVP** = phase 1–3 (see 10). **Later** = phase 4+. **Out** = not plann
 | Keyboard shortcuts (`?` help, `b` boards, `f` filter, `x` clear, `t` title, `j`/`k` move, `n` new card, `m` members, `d` due, Space assign self) | DOC D04 (b, f, x, t, j, k); 3P for the rest | **MVP**, with own help sheet. |
 | Notifications (in-app bell), email (never / periodic / instant) | DOC D12 | **MVP**: in-app. **Later**: email. |
 
+### Observed additions (O03)
+
+| Feature | Evidence | Flowdeck |
+|---|---|---|
+| List collapse button; "Collapse all lists" | OBS O03 | **MVP** |
+| Filter by activity recency; "collapse lists with no matching cards"; any/all match | OBS O03 | **MVP** (any/all), activity filter **Later** |
+| Undo last action | OBS-client O03 (`TrelloUndoAction`) | **Later** |
+| Copy/paste cards via clipboard | OBS-client O03 | **Later** |
+| Merge cards | OBS-client O03 | **Out** |
+| Auto-archive (with undo) | OBS-client O03 | **Out** |
+| Request access to a board | OBS-client O03 (`SendRequestAccess`) | **Later** |
+
 ## 7. Collaboration and sync
 
 | Feature | Evidence | Flowdeck |

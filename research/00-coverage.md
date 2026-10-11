@@ -16,13 +16,13 @@
 | 6 | Workspaces (create, settings) | A01, O01 | DOC+OBS | — | Ready | Yes |
 | 7 | Workspace roles (admin / member / guest) | D01, D11 | DOC | Normal member's rights on workspace-visible boards not joined | Ready (FD) | Yes |
 | 8 | Invitations (email, link, revoke) | D11 | DOC | Link expiry behaviour; who can invite on paid plans | Ready (FD) | Yes |
-| 9 | Board create / copy | A01, O01 | DOC+OBS | Create-dialog layout | Ready | Yes |
+| 9 | Board create / copy | A01, O01, O03 *(+O03)* | DOC+OBS | Create-dialog layout | Ready | Yes |
 | 10 | Board visibility (private / workspace / public) | O01, A01 | DOC+OBS | Public-board link behaviour | Ready (public: Later) | Yes |
 | 11 | Board settings (comments, invites, self-join, covers, counts, voting) | O01, A01 | DOC+OBS | — | Ready | Yes |
-| 12 | Board navigation, starring, switcher | D04, A01 | DOC | UI not observed | Ready (FD) | Yes (stars) |
+| 12 | Board navigation, starring, switcher | D04, A01, O03 *(+O03)* | DOC | UI not observed | Ready (FD) | Yes (stars) |
 | 13 | Board templates | D18, O01, T07 | DOC | What templates copy | Later | Yes |
 | 14 | Close / reopen / delete board | D21 | DOC | Reopen permission edge | Ready | Yes |
-| 15 | Lists: create, rename, reorder | A01, O01 | DOC+OBS | Position renumbering details | Ready | Yes |
+| 15 | Lists: create, rename, reorder | A01, O01, O03 *(+O03)* | DOC+OBS | Position renumbering details | Ready | Yes |
 | 16 | Lists: move to board, copy, move-all / archive-all cards | A01, D24 | DOC | — | Ready | Yes |
 | 17 | Lists: archive, restore, delete | D03, O01 | DOC+OBS | Restore position rule | Ready | Yes |
 | 18 | Cards: create, edit title | A01 | API | Validation copy | Ready | Yes |
@@ -31,7 +31,7 @@
 | 21 | Cards: archive, restore, delete | D03, O01 | DOC+OBS | — | Ready | Yes |
 | 22 | Card complete state | D10, O01 | DOC+OBS | — | Ready | Yes |
 | 23 | Description (Markdown) | A01 | API | Trello's Markdown dialect | Ready (FD: CommonMark + GFM) | Yes |
-| 24 | Labels (30 colours + none, colour-blind patterns) | D26, O01 | DOC+OBS | Pattern artwork (Flowdeck draws its own) | Ready | Yes |
+| 24 | Labels (30 colours + none, colour-blind patterns) | D26, O01, O03 *(+O03)* | DOC+OBS | Pattern artwork (Flowdeck draws its own) | Ready | Yes |
 | 25 | Card members | D24, A01 | DOC | — | Ready | Yes |
 | 26 | Start / due dates, badge states | D10 | DOC | Exact thresholds beyond 24 h | Ready | Yes |
 | 27 | Due reminders | D10 | DOC | Needs email/notification worker | Later | Yes |
@@ -39,25 +39,25 @@
 | 29 | Checklists and items | A01, O01 | DOC+OBS | Item assignee/due UI | Ready (assignee/due: Later) | Yes |
 | 30 | Comments, mentions, edit/delete | D22 | DOC | — | Ready | Yes |
 | 31 | Emoji reactions | D23 | DOC | Emoji set | Later | Yes |
-| 32 | Attachments (file, link) | A01, O01, T02 | Partial | Size limits only from 3P | Ready (FD limits) | Yes (+ file store) |
-| 33 | Covers (colour / image) | A01, O01 | API | Cover sizes | Ready (FD) | Yes |
-| 34 | Card and board activity | O01, D22 | DOC+OBS | — | Ready | Yes |
+| 32 | Attachments (file, link) | A01, O01, T02, O03 *(+O03)* | Partial | Size limits only from 3P | Ready (FD limits) | Yes (+ file store) |
+| 33 | Covers (colour / image) | A01, O01, O03 *(+O03)* | API | Cover sizes | Ready (FD) | Yes |
+| 34 | Card and board activity | O01, D22, O03 *(+O03)* | DOC+OBS | — | Ready | Yes |
 | 35 | Custom fields | D17, O01 | DOC+OBS | Plan tier (irrelevant) | Later | Yes |
 | 36 | Mirror cards | D13 | DOC | Sync semantics | Out | Yes |
 | 37 | Global search + operators | D05, O01 | Partial | Doc inconsistency (`has:member`); ranking | Ready (FD subset) | Yes |
-| 38 | Board filter | D04 | DOC | Filter UI options | Ready (FD) | No (client-side over loaded board) |
+| 38 | Board filter | D04, O03 *(+O03)* | DOC | Filter UI options | Ready (FD) | No (client-side over loaded board) |
 | 39 | Notifications (in-app) and watching | D12 | DOC | Exact trigger list | Ready | Yes |
 | 40 | Email notifications / digests | D12 | Partial | Default frequency conflicting | Later | Yes (+ SMTP) |
 | 41 | Keyboard shortcuts | D04 | Partial | Full list (trello.com/shortcuts blocked) | Ready (FD set) | No |
-| 42 | Real-time updates | D16, D28, T06 | Partial | Current protocol undocumented; not observed | Ready (FD contract, 06) | Yes |
+| 42 | Real-time updates | D16, D28, T06, O03 *(+O03)* | Partial | Current protocol undocumented; not observed | Ready (FD contract, 06) | Yes |
 | 43 | Concurrent edits | — | Not inspected | Trello's conflict behaviour | Ready (FD rules, 07) | Yes |
 | 44 | Refresh / persistence | D16 | Partial | Timing not measured | Ready (FD) | Yes |
-| 45 | Mobile layout and touch | D27 (historic offline only) | Not inspected | All Trello mobile UI | Ready (FD, J15) | No (client) |
+| 45 | Mobile layout and touch | D27 (historic offline only), O03 *(+O03)* | Not inspected | All Trello mobile UI | Ready (FD, J15) | No (client) |
 | 46 | Offline mobile editing | D27 | Partial (2016-17) | Current status | Out | Yes |
 | 47 | Accessibility | — | Not inspected | No Trello conformance statement found | Ready (FD WCAG 2.2 AA) | No (client) |
 | 48 | Empty / loading / error states | — | Not inspected | All | Ready (FD, 02) | No (client) |
-| 49 | Views: Table, Calendar | D08 | DOC | Behaviour details | Later | Yes |
-| 50 | Views: Timeline, Dashboard, Map, Workspace views | D08 | DOC | — | Out / Later | Yes |
+| 49 | Views: Table, Calendar | D08, O03 *(+O03)* | DOC | Behaviour details | Later | Yes |
+| 50 | Views: Timeline, Dashboard, Map, Workspace views | D08, O03 *(+O03)* | DOC | — | Out / Later | Yes |
 | 51 | Inbox, Planner | D13 | DOC | — | Out | Yes |
 | 52 | Automation (rules, buttons, scheduled, due commands) | D07, T07 | DOC | Trigger/action catalogue | Later | Yes (+ worker) |
 | 53 | Power-Ups / integrations | A01, D07 | API | — | Out (webhooks: Later) | Yes |
@@ -73,7 +73,7 @@
 
 Counts computed from the table above:
 
-- **60 features** inventoried. **0** observed in the Trello UI. REA is installed and verified, but Trello is unreachable from this environment ([E-REA](evidence/E-REA.md)).
+- **60 features** inventoried. **0** observed in the Trello UI. Update: Trello now loads; logged-out UI for boards, lists, card fronts, card dialog, filter, board menu, views and phone layout is observed (O03, [E-trello-public](evidence/E-trello-public.md)). Rows below marked *(+O03)* gained observed evidence; status counts below are from the original pass.
 - **Evidence status:** 13 DOC+OBS (cross-checked through the connector) · 25 DOC · 6 API only · 11 Partial (incomplete or conflicting docs) · 4 Not inspected · 1 N/A (self-hosting; Trello is SaaS).
 - **Readiness:** 41 Ready (19 Ready, 19 Ready (FD), 3 Ready with a later sub-part) · 13 Later (incl. 1 Out/Later) · 5 Out · 1 needs a decision (Q6, import).
 - **Backend and database:** 54 Yes · 5 No (board filter, keyboard shortcuts, mobile layout, accessibility, UI states; still served by the app) · 1 n/a (plan limits).

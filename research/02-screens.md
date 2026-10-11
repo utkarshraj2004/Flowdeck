@@ -2,6 +2,8 @@
 
 **Evidence status:** Trello's UI was **not observed** in this session (trello.com blocked, see README). Screen names and contents below come from DOC descriptions (board menu, archived items, card back, shortcuts) plus **Flowdeck design decisions (INF)**. Layout measurements, copy and animations are Flowdeck's own. Do not treat anything here as a measured Trello layout.
 
+> **Update:** logged-out Trello UI has now been observed (O03). Measured facts: lists 272 px / cards 256 px; list header = name + card count + collapse; card dialog is a two-column modal (main: title, description, attachments split Links/Files; side: "Comments and activity" with "Show details"); floating Power-ups/Automations/Comments bar; filter options and board-menu items as listed in [E-trello-public](evidence/E-trello-public.md). On phones Trello keeps 272 px lists and opens cards in a clipped modal — Flowdeck deliberately improves on this (J15).
+
 ## Global shell (INF)
 
 - **Top bar:** Flowdeck logo (original), board switcher (`b`), global search (`/`), create button, notifications bell with unread count, avatar menu.
