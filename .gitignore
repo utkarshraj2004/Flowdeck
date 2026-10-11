@@ -1,0 +1,23 @@
+# Credentials and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Dependencies and generated output
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+
+# Temporary and OS files
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Local Claude Code overrides
+.claude/settings.local.json
