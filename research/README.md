@@ -22,6 +22,7 @@ Flowdeck will be an **independent, self-hosted kanban tool** for a small team. T
 | — | [evidence/sources.md](evidence/sources.md) | Source log with IDs cited throughout |
 | — | [evidence/E-API-surface.md](evidence/E-API-surface.md) | Derived inventory of Trello's documented REST API (324 operations) |
 | — | [evidence/E-connector.md](evidence/E-connector.md) | What the authorized Trello connector exposed (schemas, enums, account shape) |
+| — | [evidence/E-REA.md](evidence/E-REA.md) | REA install, tool verification, Trello reachability probe + screenshots |
 
 ## Evidence labels
 
@@ -39,7 +40,7 @@ Every claim carries one label. Labels are not interchangeable.
 ## Method and environment (what actually happened)
 
 - **Repository state.** `main` contained the static-site scaffold from PR #1 (placeholder `site/`, validation, CI, manual Pages deploy). Untouched by this work except `CLAUDE.md`'s structure list.
-- **REA.** Cloned `morluto/rea` at commit `23d50ea` (2026-10-12); `package.json` and npm `latest` both report **rea-agents 6.4.0**, MIT licence. Its website capability (`inspect_web_page`, `observe_web_session`, `analyze_web_bundle`, `capture_web_screenshot`) attaches to a user-started Chrome over a loopback CDP port. **REA was not run**: installing it was denied by this session's permission policy ("Create Unsafe Agents"), and it could not have reached Trello anyway (next point). To use it, see [10-phases-questions.md](10-phases-questions.md#access-needed).
+- **REA.** Cloned `morluto/rea` at commit `23d50ea` (2026-10-12); `package.json` and npm `latest` both report **rea-agents 6.4.0**, MIT licence. Its website capability (`inspect_web_page`, `observe_web_session`, `analyze_web_bundle`, `capture_web_screenshot`) attaches to a user-started Chrome over a loopback CDP port. **Update (owner-authorized):** REA 6.4.0 is now installed and its website tools are verified against a local page (`list-browser-targets`, `inspect-web-page`, `capture-web-screenshot`, `analyze-web-bundle`, `observe-web-session`). It **cannot reach Trello**: the browser gets `ERR_TUNNEL_CONNECTION_FAILED` and REA reports `target_not_allowed`. Details and how to unblock: [evidence/E-REA.md](evidence/E-REA.md).
 - **Network.** The environment's egress policy returns 403 for `trello.com`, `api.trello.com`, `support.atlassian.com`, `developer.atlassian.com`, `atlassian.com`, `web.archive.org`. GitHub and package registries are reachable. Result: **no browser session against Trello, no screenshots, no network capture, no client bundle inspection.**
 - **Trello connector.** An authorized Trello connector (claude.ai) is attached, signed in to the user's real account (one workspace, one real board). Read-only calls were used to record schemas and enums. **No experiments were run** and no board content was read or saved, because the account is not a dedicated test account and the connector cannot create a separate workspace. See `E-connector`.
 - **Docs.** ~25 targeted web searches; each summary cites the official page. Recorded in `evidence/sources.md`.

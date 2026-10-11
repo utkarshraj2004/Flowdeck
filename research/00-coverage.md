@@ -73,7 +73,7 @@
 
 Counts computed from the table above:
 
-- **60 features** inventoried. **0** observed in the Trello UI.
+- **60 features** inventoried. **0** observed in the Trello UI. REA is installed and verified, but Trello is unreachable from this environment ([E-REA](evidence/E-REA.md)).
 - **Evidence status:** 13 DOC+OBS (cross-checked through the connector) · 25 DOC · 6 API only · 11 Partial (incomplete or conflicting docs) · 4 Not inspected · 1 N/A (self-hosting; Trello is SaaS).
 - **Readiness:** 41 Ready (19 Ready, 19 Ready (FD), 3 Ready with a later sub-part) · 13 Later (incl. 1 Out/Later) · 5 Out · 1 needs a decision (Q6, import).
 - **Backend and database:** 54 Yes · 5 No (board filter, keyboard shortcuts, mobile layout, accessibility, UI states; still served by the app) · 1 n/a (plan limits).

@@ -45,6 +45,7 @@ Collected 2026-10-11. **DOC** sources were read through web-search summaries tha
 
 | ID | Source |
 |---|---|
+| O02 | REA 6.4.0 + Chromium 141 probe of trello.com: blocked (`ERR_TUNNEL_CONNECTION_FAILED`, egress 403). [E-REA.md](E-REA.md) |
 | O01 | Trello connector tool schemas and read-only responses (workspace list, board list metadata, member profile shape). [E-connector.md](E-connector.md) |
 
 ## Third-party (3P), used only to flag conflicts
