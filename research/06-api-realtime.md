@@ -95,6 +95,7 @@
 
 ### Transport
 - WebSocket `GET /api/v1/ws` (same session cookie; Origin checked). Server ping every 25 s; client reconnects with exponential backoff 1 s → 30 s plus jitter.
+- **Trello observation (OBS O04, logged out, one run):** the web client keeps **two** WebSockets: `/1/Session/socket` and `/gateway/api/graphql/subscriptions`, both JSON. After a 15 s outage the first reopened ≈4 s and the second ≈19 s after the network returned; the stale first socket was closed ≈2 s after reconnect. See [E-session2 §T4](evidence/E-session2.md#t4-partial--websocket-lifecycle-and-reconnect-obs-o04-logged-out-public-board). This shows the client behaviour only, not Trello's server design. Flowdeck keeps **one** socket (INF) and shows an offline toast as in 02.
 - **Fallback:** if the socket can't connect within 10 s, poll `GET /boards/:id/events?sinceSeq=` every 5 s while the tab is visible and every 60 s when hidden. DOC D16 records Trello used polling as a fallback.
 
 ### Client → server

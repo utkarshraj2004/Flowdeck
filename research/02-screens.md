@@ -46,6 +46,10 @@
 | Empty | Board with no lists: inline "Add a list" composer focused. Workspace with no boards: create-board tile + one-line explanation. Search with no results: show operators help. Archived items empty: explanatory text. |
 | Error (network) | Non-blocking toast "Changes couldn't be saved — retrying"; optimistic change reverted after final failure; offline banner when the WebSocket is down > 5 s. |
 | Error (permission) | Read-only mode: hide/disable edit affordances; explain why on attempt. |
+
+**Observed in Trello (OBS O04, logged out; [E-session2 §T10](evidence/E-session2.md#t10--loading-offline-and-error-states-obs-o04-logged-out)):** skeleton header and list placeholders while loading; on connection loss, a bottom-left toast "You are offline. Changes made now will not be saved." while the board stays readable; no service worker, so a reload while offline fails; an unknown board or card shows the same "Sign up to see this board" page as a private one, so existence is not disclosed. **Flowdeck decision (INF):** keep the skeleton and the offline toast. Error pages S23 must not reveal whether a board exists to someone without access (403 and 404 look identical to non-members).
+
+**Due badge colours (DOC-direct D10):** light grey > 24 h away · yellow within 24 h · red overdue (first 24 h) · light pink overdue > 24 h · green complete. Flowdeck uses the same states with its own palette.
 | Conflict | If an open card is deleted/archived remotely: banner in card detail; if moved: breadcrumb updates live. |
 | Stale | On reconnect, refetch board snapshot (06). |
 | Archived card opened by URL | Banner "This card is archived" with Restore (if allowed) and Delete. DOC D03 |

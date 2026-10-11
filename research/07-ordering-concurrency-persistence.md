@@ -7,7 +7,7 @@
 | Positions are `top`, `bottom`, or a positive number; example default spacing `16384`. | API A01, OBS O01 |
 | Changes reach other open clients in well under a second via WebSockets, with polling fallback (historic description). | DOC D16 |
 | Archive is reversible; delete is permanent and only possible after archive. Deleting a list deletes its cards. No recovery after delete. | DOC D03, D21 |
-| Moving a card across boards keeps description, checklists, attachments and comments, **not** activity history, and drops members not on the target board. Labels may be dropped (open bug). | DOC D24, 3P T05 |
+| Moving a card across boards keeps description, checklists, attachments and comments, **not** activity history, and drops members not on the target board. Labels may be dropped (open bug). | DOC-direct D24, 3P T05 (labels not mentioned by D24) |
 | JSON export includes the 1000 most recent actions. | DOC D09 |
 
 **Not observed:** Trello's conflict resolution for two users editing the same description at once, renumbering behaviour when positions get close, and refresh/persistence timing. These need a test account (10 §Access).
@@ -42,7 +42,7 @@
 | Requirement | Decision |
 |---|---|
 | Storage | Local filesystem volume by default (`/data/blobs/ab/cd/<sha256>`); S3-compatible backend optional (MinIO etc.). Content-addressed and deduplicated by SHA-256. |
-| Size | Default 25 MB per file, configurable (Trello: 10 MB free / 250 MB paid per 3P T02). Enforced while streaming (no full buffering); 413 when exceeded. |
+| Size | Default 25 MB per file, configurable (Trello: 10 MB free / 250 MB paid per file, uploads only, not links: DOC-direct D30). Enforced while streaming (no full buffering); 413 when exceeded. |
 | Types | All types allowed. Served with `Content-Disposition: attachment` except images/PDF previews; `X-Content-Type-Options: nosniff`. SVG never served inline. |
 | Previews | Server generates thumbnails (≤400 px WebP) for images; covers use the thumbnail. |
 | Links | `kind=link` attachments store the URL only, with no server-side fetch in MVP (avoids SSRF). |
@@ -50,3 +50,4 @@
 | Access | Download URLs go through the API with an auth check. No public blob URLs. Public boards (later) use signed, expiring URLs. |
 | Deletion | Remove attachment row → decrement `ref_count` → a GC job deletes the blob when the count is 0 and the blob is older than 24 h (so backups taken in that window stay consistent). |
 | Quotas | Per-instance storage usage shown in admin, optional per-workspace quota. |
+| Access (Trello, DOC-direct D30) | Since 2023-12-01 Trello attachment URLs require board access (public boards excepted); deleting a card deletes its files; uploaded images automatically become the cover. Flowdeck already serves files only through authenticated, permission-checked routes (INF). |

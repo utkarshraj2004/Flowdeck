@@ -83,7 +83,7 @@ Tiers: **MVP** = phase 1–3 (see 10). **Later** = phase 4+. **Out** = not plann
 |---|---|---|
 | Global search with operators (`@member`, `#label`, `label:`, `due:day`, `due:N`, `has:attachments`, `is:archived`, `board:`, `list:`, negation `-`) | DOC D05, OBS | **MVP**: subset (text, `@`, `#`, `due:`, `has:`, `is:`, `board:`, `list:`, `-`). |
 | Board filter (members, labels, due, keyword) | DOC D04 (`f`, `x`) | **MVP** |
-| Keyboard shortcuts (`?` help, `b` boards, `f` filter, `x` clear, `t` title, `j`/`k` move, `n` new card, `m` members, `d` due, Space assign self) | DOC D04 (b, f, x, t, j, k); 3P for the rest | **MVP**, with own help sheet. |
+| Keyboard shortcuts: full list observed (OBS O04, [E-session2 §T9](evidence/E-session2.md#t9--keyboard-shortcuts-obs-o04-trellocomshortcuts-logged-out)): arrows/`j`/`k` select, Enter open, `n` insert, `e` quick edit, `c` archive, `d` due, `l` + `1`–`0` labels, `;` label names, `m` members, Space self-assign, `s` watch, `t` title, `-` checklist, `,` `.` `<` `>` move to adjacent list, `f` filter, `q` my cards, `x` clear filters, `b` boards, `/` search, `]` board menu, `z`/Shift+`z` undo/redo, `r` repeat, Ctrl/Cmd+C/X/V copy/move/paste cards, Ctrl/Cmd+Enter save, Esc cancel, `?` shortcuts page, Shift+Click bulk select | OBS O04 | **MVP**: navigation, `n`, `e`, `c`, `d`, `l`+digits, `m`, Space, `t`, `-`, `,` `.`, `f`, `q`, `x`, `/`, Esc, Ctrl+Enter, `?` (own help dialog). **Later**: undo/redo, repeat, clipboard copy/move, bulk select. |
 | Notifications (in-app bell), email (never / periodic / instant) | DOC D12 | **MVP**: in-app. **Later**: email. |
 
 ### Observed additions (O03)

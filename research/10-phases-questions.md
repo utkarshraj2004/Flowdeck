@@ -39,6 +39,15 @@ Parity checks T1–T10 in `09-test-plan.md`, plus these documentation conflicts:
 
 These items block **observed** evidence, not the build.
 
+**Status after session 2 (2026-10-11):** network access is **Full** and every Trello, Atlassian and CAPTCHA host is reachable. All four test-account variables are present. REA 6.4.0 is reinstalled and verified. **The only blocker:** Atlassian asked both test accounts for an **emailed verification code** (`id.atlassian.com/login/mfa`, "We've emailed you a code") on this new headless device. Per the owner's rule, both logins were stopped there. Supported ways forward, best first (details in [E-session2](evidence/E-session2.md#what-is-needed-to-continue)):
+
+1. In a live session, the owner says "ready". Claude clicks **Resend email** once per account, and the owner replies with the two one-time codes. They are typed only into the Atlassian form and never stored.
+2. Enable authenticator-app two-step verification on both test accounts and provide the TOTP secrets as environment variables (e.g. `TRELLO_TEST_TOTP_SECRET`, `TRELLO_TEST2_TOTP_SECRET`). This is likely to replace the email challenge, but that is unverified.
+
+Once logged in, the remaining work is T1–T8 and T10 (logged in) in a dedicated synthetic workspace, as planned in `09-test-plan.md`.
+
+### Earlier status (session 1, kept for history)
+
 1. **A dedicated Trello test account** (separate from your real one), ideally with a second test user for permission checks. Connect it to Claude via the Trello connector, or give a session where Claude can drive a browser. **Never put credentials in the repo or in chat.** The connected account in this session is your real one (it holds a real board), so no experiments were run on it.
 2. **Network allow-list** — *mostly done.* Trello, Atlassian and `*.atl-paas.net` load and the login form renders. Still blocked and possibly required for login challenges: `*.captcha-sdk.awswaf.com`, `www.recaptcha.net`, `google.com` (see `evidence/E-trello-public.md`). Test-account variables were not visible to the session. Original request: `trello.com`, `*.trello.com`, `trello.net`, `support.atlassian.com`, `developer.atlassian.com`, `id.atlassian.com`, `*.atlassian.com`, and Trello's static asset CDN. Change it in the environment settings: the cloud environment menu in the session title bar → Edit → Network access → Allowed domains (https://code.claude.com/docs/en/cloud-environments#network-access).
 3. **REA**: done. Installed with owner authorization and verified (see `evidence/E-REA.md`). It only needs items 1–2 to reach Trello. Test-account credentials go in environment variables `TRELLO_TEST_EMAIL` / `TRELLO_TEST_PASSWORD` (optionally `TRELLO_TEST2_*`), set in the environment settings, never in chat or the repo.

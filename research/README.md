@@ -23,6 +23,7 @@ Flowdeck will be an **independent, self-hosted kanban tool** for a small team. T
 | — | [evidence/E-API-surface.md](evidence/E-API-surface.md) | Derived inventory of Trello's documented REST API (324 operations) |
 | — | [evidence/E-connector.md](evidence/E-connector.md) | What the authorized Trello connector exposed (schemas, enums, account shape) |
 | — | [evidence/E-REA.md](evidence/E-REA.md) | REA install, tool verification, Trello reachability probe + screenshots |
+| — | [evidence/E-session2.md](evidence/E-session2.md) | **Session 2**: login attempt (stopped at Atlassian email verification), full shortcut list, logged-out loading/offline/not-found states, WebSocket reconnect timeline, official docs read directly |
 | — | [evidence/E-trello-public.md](evidence/E-trello-public.md) | **Live Trello observations** (logged out, public board): layout, card dialog, filter, menu, views, phone; REA results; blocked login hosts |
 
 ## Evidence labels
@@ -32,6 +33,7 @@ Every claim carries one label. Labels are not interchangeable.
 | Label | Meaning |
 |---|---|
 | **OBS** | Directly observed in this session through authorized access (the Trello connector, operating on the user's own account). |
+| **DOC-direct** | Official page fetched and read directly (session 2). Stronger than DOC. |
 | **DOC** | Supported by official Trello/Atlassian documentation. In this session docs were read **second-hand**, via web-search summaries citing `support.atlassian.com`, `trello.com/guide`, `developer.atlassian.com`, and the Atlassian blog (direct fetch was blocked; see below). |
 | **API** | Trello's documented REST API (derived from a scraped OpenAPI mirror, see `E-API`). |
 | **3P** | Third-party article or community post. Used only to flag conflicts or fill gaps; never sole basis for a requirement. |
@@ -48,5 +50,8 @@ Every claim carries one label. Labels are not interchangeable.
 - **Redaction.** No tokens, cookies, IDs, or personal data are stored. Account identifiers in `E-connector` are replaced with placeholders.
 
 ## Honest status
+
+**Session 2 (2026-10-11):** network access is Full and the test-account credentials are present, but Atlassian required an **emailed verification code** for both accounts, so no login succeeded and nothing authenticated was observed. Added: the full shortcut list, logged-out loading/offline/not-found states, the client WebSocket reconnect timeline, and eleven official pages read directly. See [evidence/E-session2.md](evidence/E-session2.md).
+
 
 This is a **systematic inventory with explicit gaps**, not a full reverse-engineering. Most Trello behaviour here is **DOC** (second-hand) or **API**. Logged-out UI (board layout, card dialog, filter, board menu, views, phone layout) is now **OBS**; everything requiring an account (editing, drag-and-drop, permissions, multi-user real-time) is still unobserved. The specification is ready to build the core (workspaces, boards, lists, cards, labels, members, dates, checklists, comments, attachments, archive, search, real-time) from Flowdeck's own design decisions. Exact UI parity details (layout measurements, copy, animation, edge-case error text) remain unverified. See [00-coverage.md](00-coverage.md).

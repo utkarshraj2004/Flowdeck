@@ -89,3 +89,21 @@ One test per (role × action) cell in `04-permissions.md` over the API, plus an 
 | T8 | Notification triggers and default email frequency | J10 |
 | T9 | Keyboard shortcut list at `trello.com/shortcuts` | 01 §6 |
 | T10 | Empty, loading, offline and error states | 02 |
+
+### T status after session 2 (2026-10-11)
+
+Both test-account logins stopped at Atlassian's new-device email verification ([E-session2](evidence/E-session2.md#login-attempt-blocked-by-email-verification)), so nothing that needs an account was observed.
+
+| ID | Status | Evidence |
+|---|---|---|
+| T1 | **Partial**: logged-out desktop and phone layout observed (session 1). Logged-in board (composers, badges on own cards) not observed | [E-trello-public](evidence/E-trello-public.md) |
+| T2 | **Not observed** (needs login) | — |
+| T3 | **Not observed** (needs two logged-in users) | — |
+| T4 | **Partial**: two WebSockets (`/1/Session/socket`, `/gateway/api/graphql/subscriptions`), JSON frames, reconnect ≈4 s / ≈19 s after a 15 s outage. Two-user latency not measured | [E-session2 §T4](evidence/E-session2.md#t4-partial--websocket-lifecycle-and-reconnect-obs-o04-logged-out-public-board) |
+| T5 | **Docs only** (DOC-direct D01, D02, D11). Not exercised with the second account | [E-session2 §docs](evidence/E-session2.md#official-documentation-read-directly-doc-direct) |
+| T6 | **Docs only**: upload limit 10 MB free / 250 MB paid (D30). Validation copy not observed | same |
+| T7 | **Docs only**: archive-before-delete, "Switch to lists" → "Send to board", "Restore", confirmation click (D03, D29). Wording and restore position not observed | same |
+| T8 | **Docs only**: trigger list and frequency options (D12). Default frequency still unknown | same |
+| T9 | **Done** (OBS O04): full shortcut list captured | [E-session2 §T9](evidence/E-session2.md#t9--keyboard-shortcuts-obs-o04-trellocomshortcuts-logged-out) |
+| T10 | **Partial** (OBS O04): skeleton loading, offline toast, offline reload, not-found → "Sign up to see this board". Logged-in empty/error states not observed | [E-session2 §T10](evidence/E-session2.md#t10--loading-offline-and-error-states-obs-o04-logged-out) |
+
