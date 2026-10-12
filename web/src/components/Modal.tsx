@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -27,6 +27,13 @@ export function Modal({
   closeRef.current = onClose;
   // React keydown (not a native listener) so inner editors can stopPropagation() on Esc first.
   const keyRef = useRef<((e: KeyboardEvent) => void) | null>(null);
+
+  // If the focused element disappears (e.g. loading content replaced by the real content), keep focus
+  // inside the dialog instead of letting it fall back to <body>, outside the focus trap.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el && (!document.activeElement || document.activeElement === document.body)) el.focus();
+  });
 
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;

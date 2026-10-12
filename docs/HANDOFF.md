@@ -23,9 +23,9 @@
   - the HTTPS profile, which has not been exercised.
 - **Tests:**
   - 18 unit + 46 API/realtime tests (Vitest) pass;
-  - 14 Playwright browser tests (desktop, phone, tablet touch, axe) pass;
+  - 16 Playwright browser tests (desktop, phone, tablet touch, axe) pass;
   - the Docker Compose smoke test passes (build, restart, backup, wipe, restore, identical export and file bytes).
-  - All were run locally in Claude Code Cloud. **GitHub Actions runs them for the first time on the implementation PR**, so check its result.
+  - All pass locally in Claude Code Cloud and in GitHub Actions on PR #4. The first CI run caught one intermittent focus bug in the card dialog; it is fixed, and a regression test was added.
 - `npm audit`: 0 known vulnerabilities (vitest and concurrently were updated during the session).
 - **Bugs found by the tests and fixed this session:**
   - login rate-limit key;
@@ -37,6 +37,7 @@
   - avatar contrast;
   - unlabeled selects;
   - composer race on Esc;
+  - focus escaping the card dialog while it loads;
   - tokens in request logs.
 
 ## Decisions made (and why)

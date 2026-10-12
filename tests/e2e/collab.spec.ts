@@ -290,3 +290,25 @@ test('filter with shortcuts and global search', async ({ page, context }) => {
   await expect(page.getByRole('link', { name: 'Write newsletter' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Fix login bug' })).toHaveCount(0);
 });
+
+for (const delay of [0, 300]) {
+  test(`focus never escapes the card dialog while it loads (card request delay ${delay} ms)`, async ({ page, context }) => {
+    const user = await createUser(uniq('focus'));
+    const api = await loginContext(context, user.email);
+    const { board, lists } = await seedBoard(api, 'Focus board');
+    await api.call('POST', `/lists/${lists[0].id}/cards`, { name: 'focus me' });
+    await page.route('**/api/v1/boards/*/cards/*', async (r) => {
+      await new Promise((x) => setTimeout(x, delay));
+      await r.continue();
+    });
+    await page.goto(`/b/${board.shortId}`);
+    await page.locator('[data-card-id]').filter({ hasText: 'focus me' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('dialog')).toBeVisible();
+    for (let i = 0; i < 25; i++) {
+      await page.keyboard.press('Tab');
+      expect(await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]')), `after Tab #${i + 1}`).toBe(true);
+      await page.waitForTimeout(20);
+    }
+  });
+}

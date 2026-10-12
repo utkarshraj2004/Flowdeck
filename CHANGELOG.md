@@ -14,11 +14,14 @@ All notable changes to Flowdeck are recorded here. The format follows [Keep a Ch
 - Real-time collaboration over WebSocket with gap-free per-board sequence numbers, reconnect replay, polling fallback, half-open connection detection, editing presence, explicit conflict prompts and unsaved-change protection.
 - In-app notifications and watching, board filters (saved in the URL), global search with operators, keyboard shortcuts, responsive phone layout, accessibility work (axe-clean key screens).
 - Operations: automatic migrations with downgrade refusal, health endpoints, backup/restore scripts, optional Caddy HTTPS profile, compose smoke test.
-- Tests: 18 unit, 46 API/realtime, 14 browser tests and a deployment smoke test; GitHub Actions CI.
+- Tests: 18 unit, 46 API/realtime, 16 browser tests and a deployment smoke test; GitHub Actions CI.
 - Documentation: README, architecture, operations, implementation checklist, handoff, dependency notices, contributing and security policy.
 
 ### Changed
 - Replaced the static-site placeholder (`site/`, page validation scripts and the manual GitHub Pages deploy workflow) with the application. GitHub Pages is not used for Flowdeck.
+
+### Fixed
+- Keyboard focus could escape the card dialog on the first Tab while the card was loading (found by CI; regression test added).
 
 ### Security
 - Setup, reset and invite tokens are redacted from request logs.
