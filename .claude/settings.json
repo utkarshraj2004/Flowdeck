@@ -3,7 +3,7 @@
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "command": "npm ci --no-audit --no-fund >/dev/null 2>&1 || true" }
+          { "type": "command", "command": "bash scripts/dev-setup.sh" }
         ]
       }
     ]
