@@ -215,3 +215,21 @@ Drawer presentation (B): notifications are **grouped under one card header** (co
 - **T5 member, observer and guest rows**: need B as an actual member. Observer is a paid feature anyway.
 - **@mention and "added to card" notifications for a member**: need B as a member.
 - **Touch drag on a real phone**: unverified (emulation cannot start native drags).
+
+## 15 · Session 3 membership check, 2026-10-12
+
+Read-only check before resuming gaps 1–3. Nothing on the board was created, edited or deleted.
+
+| Check | Result |
+|---|---|
+| Environment (names only) | `TRELLO_TEST_EMAIL`, `TRELLO_TEST_PASSWORD`, `TRELLO_TEST2_EMAIL`, `TRELLO_TEST2_PASSWORD` present. `trello.com` 200, `id.atlassian.com/login` 202, `*.atl-paas.net` 200. |
+| Login, both accounts (fresh headless profiles) | Email → Continue → password → **"Security review" interstitial** (`/login/security-screen`): "Enable two-step verification · Continue without two-step verification · Create a passkey". "Continue without…" was chosen (account settings unchanged) → logged in. **No email verification code was requested this time.** `/1/members/me` → 200 for both. |
+| FD Parity Board memberships, seen by A and by B | **Only User A (admin).** User B is still **not** a member. |
+| Workspace memberships | Only User A. B → 401 "unauthorized organization". |
+| B's open boards | FD Parity Board **not** listed. |
+| Board history since 2026-10-11 19:30 UTC (A's view) | One non-card action only: `updateBoard` visibility `org → public` at 19:38:13 UTC (already recorded in §14). **No add-member, invite or role action.** |
+| Workspace history since then | None. |
+| B's notifications | Only the five watcher notifications from §14 (19:49 UTC). **No invite or "added to board" notification.** |
+| Board visibility | Still **Public**. |
+
+**Result:** the owner's invite step (HANDOFF "Blocker") has not taken effect. Gaps 1–3 (two-user conflict/real-time, member/observer/guest roles, member-triggered notifications) remain **blocked** and were not attempted. Gap 4 (real-phone touch drag) still needs a real device.

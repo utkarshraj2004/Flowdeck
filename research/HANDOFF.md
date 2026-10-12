@@ -50,6 +50,10 @@ The research is **paused** and nothing has been implemented. Do not merge PR #2 
 | T9 Shortcuts | ✅ Done | Full list |
 | T10 Empty/loading/offline/error states | ✅ Done | Logged in and out |
 
+## Session 3 check (2026-10-12)
+
+Environment confirmed (all four variables present by name; Trello, Atlassian and `*.atl-paas.net` reachable). Both accounts logged in. This time Atlassian showed a **"Security review"** page (suggesting two-step verification or a passkey); "Continue without two-step verification" worked and **no email code was needed**. Membership was re-verified from both sessions: **Account 2 is still not a member** of FD Parity Board or Flowdeck Research WS, and there has been no invite or member action since 2026-10-11 19:38 UTC. Gaps 1–3 were therefore not run. Details: [E-session2-auth §15](evidence/E-session2-auth.md#15--session-3-membership-check-2026-10-12).
+
 ## Remaining gaps (actual, as of 2026-10-12)
 
 Everything else in T1–T10 is done or mostly done (table above). What remains:
