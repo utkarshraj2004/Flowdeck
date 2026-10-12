@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
+  AutoScrollActivator,
+  closestCenter,
   closestCorners,
   DndContext,
   DragOverlay,
@@ -11,6 +13,7 @@ import {
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
+  type CollisionDetection,
 } from '@dnd-kit/core';
 import { arrayMove, horizontalListSortingStrategy, SortableContext } from '@dnd-kit/sortable';
 import { generateKeyBetween } from 'fractional-indexing';
@@ -182,10 +185,12 @@ export function BoardPage() {
   );
 
   // ---- filter ----
-  const filter: Filter = filterFromParams(params);
+  // Filter state is local (synchronous, so controls never flicker) and mirrored into the URL so it can be shared.
+  const [filter, setFilterState] = useState<Filter>(() => filterFromParams(params));
   const filterActive = !!(filter.q || filter.members.length || filter.labels.length || filter.due || filter.status);
   const setFilter = (f: Partial<Filter>) => {
     const next = { ...filter, ...f };
+    setFilterState(next);
     const p = new URLSearchParams(params);
     for (const [k, v] of Object.entries({ q: next.q, members: next.members.join(','), labels: next.labels.join(','), due: next.due, status: next.status, mode: next.mode === 'all' ? 'all' : '' }))
       v ? p.set(k, v) : p.delete(k);
@@ -200,7 +205,7 @@ export function BoardPage() {
     for (const l of sortedLists(state)) cols[l.id] = cardsInList(state, l.id).filter((c) => matchesFilter(c, filter, me!.id)).map((c) => c.id);
     return cols;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, params.toString()]);
+  }, [state, filter]);
   const [dragCols, setDragCols] = useState<Cols | null>(null);
   const [activeDrag, setActiveDrag] = useState<string | null>(null);
   const [kbMove, setKbMove] = useState<{ cardId: string } | null>(null);
@@ -258,6 +263,13 @@ export function BoardPage() {
     },
     [state, ingest, push, load],
   );
+
+  // Lists only collide with lists; cards collide with cards and list bodies.
+  const collisions: CollisionDetection = (args) => {
+    const isList = String(args.active.id).startsWith('list:');
+    const droppableContainers = args.droppableContainers.filter((c) => String(c.id).startsWith('list:') === isList || (!isList && String(c.id).startsWith('listbody:')));
+    return isList ? closestCenter({ ...args, droppableContainers }) : closestCorners({ ...args, droppableContainers });
+  };
 
   const sensors = useSensors(useSensor(MouseSensor, { activationConstraint: { distance: 6 } }), useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }));
 
@@ -525,7 +537,11 @@ export function BoardPage() {
         )}
         {showFilter && <FilterPanel filter={filter} setFilter={setFilter} onClose={() => setShowFilter(false)} />}
         <div className="board-canvas" aria-label={`${board.name} lists`}>
-          <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => (setDragCols(null), setActiveDrag(null))}>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={collisions}
+            // Scroll by finger/pointer position: on phones a card is ~85% of the screen wide, so rect-based auto-scroll never stops.
+            autoScroll={{ activator: AutoScrollActivator.Pointer, threshold: { x: 0.15, y: 0.15 }, acceleration: 6 }} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => (setDragCols(null), setActiveDrag(null))}>
             <SortableContext items={lists.map((l) => `list:${l.id}`)} strategy={horizontalListSortingStrategy} disabled={!access.can.edit}>
               <ol className="lists">
                 {lists.map((l) => (
@@ -546,7 +562,7 @@ export function BoardPage() {
           </DndContext>
           {lists.length === 0 && !access.can.edit && <p className="board-empty">This board has no lists yet.</p>}
         </div>
-        <div className="visually-hidden" aria-live="assertive" aria-atomic="true">
+        <div id="board-announcer" className="visually-hidden" aria-live="assertive" aria-atomic="true">
           {announcement}
         </div>
       </div>

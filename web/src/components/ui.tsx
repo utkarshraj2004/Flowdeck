@@ -7,7 +7,7 @@ export function Avatar({ user, size = 28, title }: { user: { fullName: string; i
   return (
     <span
       className="avatar"
-      style={{ width: size, height: size, fontSize: size * 0.4, background: `hsl(${hue} 45% 38%)` }}
+      style={{ width: size, height: size, fontSize: size * 0.4, background: `hsl(${hue} 45% 30%)` }}
       title={title ?? user.fullName}
       aria-label={title ?? user.fullName}
       role="img"

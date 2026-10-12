@@ -1094,7 +1094,7 @@ function MoveCopyPanel({ card, mode, onDone }: { card: Detail; mode: 'move' | 'c
       )}
       <label className="field">
         <span>Board</span>
-        <select value={boardId} onChange={(e) => setBoardId(e.target.value)}>
+        <select aria-label="Destination board" value={boardId} onChange={(e) => setBoardId(e.target.value)}>
           {boards.map((b) => (
             <option key={b.id} value={b.id}>
               {b.name}
@@ -1104,7 +1104,7 @@ function MoveCopyPanel({ card, mode, onDone }: { card: Detail; mode: 'move' | 'c
       </label>
       <label className="field">
         <span>List</span>
-        <select value={listId} onChange={(e) => setListId(e.target.value)}>
+        <select aria-label="Destination list" value={listId} onChange={(e) => setListId(e.target.value)}>
           {lists.map((l) => (
             <option key={l.id} value={l.id}>
               {l.name}
@@ -1114,7 +1114,7 @@ function MoveCopyPanel({ card, mode, onDone }: { card: Detail; mode: 'move' | 'c
       </label>
       <label className="field">
         <span>Position</span>
-        <select value={pos} onChange={(e) => setPos(e.target.value)}>
+        <select aria-label="Position in list" value={pos} onChange={(e) => setPos(e.target.value)}>
           <option value="top">Top</option>
           {inList.map((c) => (
             <option key={c.id} value={c.id}>

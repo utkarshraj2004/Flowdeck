@@ -208,7 +208,7 @@ function MoveListDialog({ list, lists, onClose }: { list: List; lists: List[]; o
       >
         <label className="field">
           <span>Board</span>
-          <select value={boardId} onChange={(e) => setBoardId(e.target.value)}>
+          <select aria-label="Destination board" value={boardId} onChange={(e) => setBoardId(e.target.value)}>
             {boards.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
@@ -219,7 +219,7 @@ function MoveListDialog({ list, lists, onClose }: { list: List; lists: List[]; o
         </label>
         <label className="field">
           <span>Position</span>
-          <select value={after} onChange={(e) => setAfter(e.target.value)}>
+          <select aria-label="Position" value={after} onChange={(e) => setAfter(e.target.value)}>
             <option value="">First</option>
             {others.map((l) => (
               <option key={l.id} value={l.id}>
