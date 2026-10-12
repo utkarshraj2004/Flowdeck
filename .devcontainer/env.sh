@@ -31,6 +31,9 @@ unset _fd_name _fd_domain
 export FLOWDECK_BASE_URL
 export PORT="$FLOWDECK_PORT"
 export HOST=0.0.0.0
+# Only the Codespaces (or VS Code) port forwarder reaches this port, so trust its X-Forwarded-* headers:
+# real client IPs for the login rate limit, and X-Forwarded-Host as a fallback for the WebSocket origin check.
+export FLOWDECK_TRUST_PROXY=true
 export FLOWDECK_DATA_DIR="$STATE_DIR/app"
 export FLOWDECK_WEB_DIR="$FLOWDECK_ROOT/dist/web"
 export NPM_CONFIG_UPDATE_NOTIFIER=false

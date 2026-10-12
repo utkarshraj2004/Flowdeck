@@ -179,7 +179,7 @@ More in [CONTRIBUTING.md](CONTRIBUTING.md) and [CLAUDE.md](CLAUDE.md).
 
 | Suite | Count | Covers |
 |---|---|---|
-| Unit (`tests/unit`) | 18 | Permission matrix, search parser, board filter, due-date states, log redaction |
+| Unit (`tests/unit`) | 21 | Permission matrix, search parser, board filter, due-date states, log redaction, WebSocket origin check |
 | API + realtime (`tests/api`) | 46 | Two-user authorization and workspace isolation (every denied write is read back unchanged), last-admin rules, invitations, CSRF, login rate limit, ordering (including a 150-move model check and restart persistence), live delivery, reconnect replay, access revocation, conflicts, uploads (limits, headers, permissions, cleanup), notifications, search, cross-board moves, export, migrations |
 | Browser (`tests/e2e`) | 16 | First-admin setup → invite → two users live; mouse, touch and keyboard moves; dialog focus (including while a card loads); edit conflicts; unsaved changes; offline → reconnect; observer/outsider/removal; uploads; filter and search; axe accessibility scan of 7 screens; phone layout |
 | Deployment (`scripts/compose-smoke.mjs`) | 1 | Docker build → first admin → data → container restart → backup → wipe volumes → restore → identical export and file bytes |

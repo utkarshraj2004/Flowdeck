@@ -11,9 +11,7 @@ import { isUuid } from '../lib/validate.js';
  */
 export async function wsRoutes(app: FastifyInstance, ctx: Ctx) {
   app.get('/ws', { websocket: true }, (socket, req) => {
-    const origin = req.headers.origin;
-    const host = req.headers.host;
-    if (!req.user || (origin && host && new URL(origin).host !== host && origin !== ctx.config.baseUrl)) {
+    if (!req.user || !originAllowed(req.headers.origin, req.headers, ctx)) {
       socket.send(JSON.stringify({ type: 'error', code: req.user ? 'bad_origin' : 'unauthenticated' }));
       socket.close(4401, 'unauthenticated');
       return;
@@ -73,4 +71,29 @@ export async function wsRoutes(app: FastifyInstance, ctx: Ctx) {
       ctx.hub.removeClient(client);
     });
   });
+}
+
+/**
+ * Cross-site WebSocket protection: the page's Origin must be this server — the Host it was reached
+ * on, the configured public URL, or (only with FLOWDECK_TRUST_PROXY=true) the host a trusted reverse
+ * proxy such as the Codespaces port forwarder reports in X-Forwarded-Host.
+ */
+export function originAllowed(origin: string | undefined, headers: Record<string, string | string[] | undefined>, ctx: Pick<Ctx, 'config'>): boolean {
+  if (!origin) return true; // non-browser clients; the session cookie is still required
+  let originHost: string;
+  try {
+    originHost = new URL(origin).host;
+  } catch {
+    return false;
+  }
+  const allowed = new Set<string>();
+  if (typeof headers.host === 'string') allowed.add(headers.host);
+  try {
+    allowed.add(new URL(ctx.config.baseUrl).host);
+  } catch {
+    /* ignore */
+  }
+  const fwd = headers['x-forwarded-host'];
+  if (ctx.config.trustProxy && typeof fwd === 'string') for (const h of fwd.split(',')) allowed.add(h.trim());
+  return allowed.has(originHost);
 }

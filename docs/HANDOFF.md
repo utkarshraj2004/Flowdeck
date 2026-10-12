@@ -22,7 +22,7 @@
   - shortcut set;
   - the HTTPS profile, which has not been exercised.
 - **Tests:**
-  - 18 unit + 46 API/realtime tests (Vitest) pass;
+  - 21 unit + 46 API/realtime tests (Vitest) pass;
   - 16 Playwright browser tests (desktop, phone, tablet touch, axe) pass;
   - the Docker Compose smoke test passes (build, restart, backup, wipe, restore, identical export and file bytes).
   - All pass locally in Claude Code Cloud and in GitHub Actions on PR #4. The first CI run caught one intermittent focus bug in the card dialog; it is fixed, and a regression test was added.
@@ -43,6 +43,8 @@
 ## Session 2: browser preview through GitHub Codespaces, and ECC
 
 **Why:** Claude Code cloud sessions cannot expose a web preview, and the owner does not want to install Docker, Git or development tools locally. GitHub Codespaces is the browser-only way to open Flowdeck. Owner guide: [CODESPACES.md](CODESPACES.md).
+
+**Two parallel implementations were merged.** An earlier push from another session (`673fc7f`) used fixed database credentials, named volumes, and `setup.sh`/`start.sh`/`create-admin.sh` helpers. Its `.devcontainer/` was replaced by the version below, which generates the database password, keeps data under `/workspaces`, and supervises the server. Its stricter WebSocket origin check (`originAllowed` in `server/src/routes/ws.ts`, with `tests/unit/ws-origin.test.ts`) and `FLOWDECK_TRUST_PROXY=true` inside the codespace were kept. A codespace created from `673fc7f` keeps its data in its own named volumes, which this setup does not read; create a fresh codespace.
 
 **What was added:**
 - `.devcontainer/`:
