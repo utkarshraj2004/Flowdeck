@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useLayer } from './Popover';
 import { X } from './icons';
@@ -28,6 +28,8 @@ export function Modal({
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   const isTop = useLayer();
+  // Captured during the first render, before an autoFocus field inside the dialog takes focus.
+  const [opener] = useState(() => document.activeElement as HTMLElement | null);
   // React keydown (not a native listener) so inner editors can stopPropagation() on Esc first.
   const keyRef = useRef<((e: KeyboardEvent) => void) | null>(null);
 
@@ -39,7 +41,6 @@ export function Modal({
   });
 
   useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
     const el = ref.current!;
     const first = (initialFocus && el.querySelector<HTMLElement>(initialFocus)) || el.querySelector<HTMLElement>(FOCUSABLE) || el;
     first.focus();

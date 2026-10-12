@@ -64,9 +64,9 @@ test('phone: the Move dialog moves a card to another list without dragging', asy
   await api.call('POST', `/lists/${lists[0].id}/cards`, { name: 'Move by tapping' });
   await page.goto(`/b/${board.shortId}`);
   await page.getByText('Move by tapping').tap();
-  await page.getByRole('button', { name: 'Move', exact: true }).tap();
+  await page.getByRole('button', { name: /In list To do\. Move card/ }).tap();
   await page.getByLabel('Destination list').selectOption({ label: 'Done' });
-  await page.locator('.side-panel').getByRole('button', { name: 'Move' }).tap();
+  await page.getByRole('dialog', { name: 'Move card' }).getByRole('button', { name: 'Move', exact: true }).tap();
   await expect(page.getByText('#1 in list Done')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect.poll(() => cardTitles(page, 'Done')).toEqual(['Move by tapping']);

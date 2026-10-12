@@ -7,6 +7,7 @@ import { realtime, type ConnStatus } from '../realtime';
 import { Avatar, Logo, Spinner, timeAgo } from './ui';
 import { loadBoardPage } from '../board/lazy';
 import { useToasts } from './Toasts';
+import { ErrorBoundary } from './ErrorBoundary';
 import { Modal } from './Modal';
 import { MenuItems, Popover, useLayer, usePopover } from './Popover';
 import { ShortcutHelp, isTypingTarget } from './Shortcuts';
@@ -152,7 +153,9 @@ export function Shell() {
       {status === 'offline' && <OfflineBanner />}
       <main id="main" tabIndex={-1}>
         <Suspense fallback={<Spinner label="Loading" />}>
-          <Outlet />
+          <ErrorBoundary resetKey={loc.pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </Suspense>
       </main>
       {switcher && <BoardSwitcher onClose={() => setSwitcher(false)} />}

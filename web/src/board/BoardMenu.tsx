@@ -359,6 +359,9 @@ function Settings() {
       <label className="row">
         <input type="checkbox" checked={board.prefs.cardCovers !== false} onChange={(e) => save({ prefs: { cardCovers: e.target.checked } })} /> Show image covers on cards
       </label>
+      <label className="row">
+        <input type="checkbox" checked={!!board.isTemplate} onChange={(e) => save({ isTemplate: e.target.checked })} /> Use this board as a template (offered in “Create board”)
+      </label>
     </div>
   );
 }

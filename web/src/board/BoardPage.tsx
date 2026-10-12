@@ -23,45 +23,75 @@ import { realtime } from '../realtime';
 import { useConnStatus } from '../components/Shell';
 import { useToasts } from '../components/Toasts';
 import { Avatar, Spinner, dueState } from '../components/ui';
+import { Building2, Ellipsis, Eye, ListFilter, Lock, Star, UserPlus, X } from '../components/icons';
 import { isTypingTarget } from '../components/Shortcuts';
 import { NotFoundPage } from '../pages/NotFound';
 import { BoardActionsContext, BoardContext, useBoard as useContextSafe, type BoardActions, type BoardCtx } from './context';
-import { byPos, cardsInList, fromSnapshot, reduceEvent, sortedLists, type BoardEvent, type BoardState, type Card, type List } from './store';
-import { AddList, CardTile, ListColumn } from './ListColumn';
+import { byPos, cardsInList, fromSnapshot, reduceEvent, type BoardEvent, type BoardState, type Card, type List } from './store';
+import { AddList, ListColumn } from './ListColumn';
+import { CardTile, QuickEdit } from './CardTile';
+import { FilterPanel, filterFromParams, matchesFilter, type Filter } from './Filter';
+import { DatesPicker, LabelsPicker, MembersPicker, MoveCardPicker } from './pickers';
 import { loadCardModal } from './lazy';
 
 const CardModal = lazy(() => loadCardModal().then((m) => ({ default: m.CardModal })));
 const BoardMenu = lazy(() => import('./BoardMenu').then((m) => ({ default: m.BoardMenu })));
 const MembersDialog = lazy(() => import('./MembersDialog').then((m) => ({ default: m.MembersDialog })));
-import { FilterPanel, filterFromParams, matchesFilter, type Filter } from './Filter';
 
 type Cols = Record<string, string[]>;
 const EMPTY: Card[] = [];
+export type CardPopKind = 'quick' | 'labels' | 'members' | 'dates' | 'move';
+export type CardPop = { kind: CardPopKind; cardId: string; anchor: HTMLElement };
 
-/** Board-wide data every card tile needs; changes only when labels, members, edit rights or cover settings change. */
+/** Board-wide data every card tile needs; changes only when labels, members, edit rights or display settings change. */
 export interface CardView {
   shortId: string;
   labels: BoardState['labels'];
   membersById: Record<string, BoardState['members'][number]>;
   canEdit: boolean;
   covers: boolean;
+  labelNames: boolean;
+  watched: Set<string>;
 }
-function useCardView(state: BoardState | null): CardView | null {
+function useCardView(state: BoardState | null, labelNames: boolean): CardView | null {
   const labels = state?.labels;
   const members = state?.members;
   const shortId = state?.board.shortId;
   const canEdit = !!state?.access.can.edit;
   const covers = state?.board.prefs.cardCovers !== false;
+  const watchedIds = state?.watchedCardIds;
   return useMemo(
-    () => (labels && members && shortId ? { shortId, labels, membersById: Object.fromEntries(members.map((m) => [m.id, m])), canEdit, covers } : null),
-    [labels, members, shortId, canEdit, covers],
+    () =>
+      labels && members && shortId
+        ? { shortId, labels, membersById: Object.fromEntries(members.map((m) => [m.id, m])), canEdit, covers, labelNames, watched: new Set(watchedIds) }
+        : null,
+    [labels, members, shortId, canEdit, covers, labelNames, watchedIds],
   );
 }
+
+// Per-browser conveniences (never required for correctness): collapsed lists and recently viewed boards.
+const storage = {
+  get<T>(key: string, fallback: T): T {
+    try {
+      const v = localStorage.getItem(key);
+      return v ? (JSON.parse(v) as T) : fallback;
+    } catch {
+      return fallback;
+    }
+  },
+  set(key: string, value: unknown) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      /* storage unavailable: the setting just isn't remembered */
+    }
+  },
+};
 
 export function BoardPage() {
   const { shortId, cardNumber } = useParams();
   const nav = useNavigate();
-  const { me } = useAuth();
+  const { me, setMe } = useAuth();
   const { push } = useToasts();
   const [params, setParams] = useSearchParams();
   const [state, setState] = useState<BoardState | null>(null);
@@ -72,11 +102,16 @@ export function BoardPage() {
   const [showMenu, setShowMenu] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
   const [announcement, setAnnouncement] = useState('');
+  const [cardPop, setCardPop] = useState<CardPop | null>(null);
+  const [labelNames, setLabelNames] = useState(!!me?.prefs.labelNames);
+  const [collapsed, setCollapsed] = useState<string[]>([]);
   const seqRef = useRef(0);
   const pending = useRef(new Map<number, BoardEvent>());
   const gapTimer = useRef<number | undefined>(undefined);
   const listeners = useRef(new Set<(e: BoardEvent) => void>());
   const boardIdRef = useRef<string>('');
+  const hovered = useRef<string | null>(null);
+  const lastArchived = useRef<null | { kind: 'card' | 'list'; id: string; name: string }>(null);
   const status = useConnStatus();
 
   const load = useCallback(async () => {
@@ -88,6 +123,9 @@ export function BoardPage() {
       setState(fromSnapshot(snap));
       setError(null);
       document.title = `${snap.board.name} · Flowdeck`;
+      setCollapsed(storage.get<string[]>(`fd:collapsed:${snap.board.id}`, []));
+      const recent = storage.get<{ shortId: string }[]>('fd:recentBoards', []).filter((b) => b && b.shortId !== snap.board.shortId);
+      storage.set('fd:recentBoards', [{ shortId: snap.board.shortId, name: snap.board.name, background: snap.board.background, at: Date.now() }, ...recent].slice(0, 8));
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) setError('not_found');
       else push({ kind: 'error', text: (e as Error).message });
@@ -182,7 +220,8 @@ export function BoardPage() {
     async <T,>(fn: () => Promise<T>, okText?: string) => {
       try {
         const r: any = await fn();
-        if (r?.event) ingest(r.event);
+        if (r?.events) r.events.forEach(ingest);
+        else if (r?.event) ingest(r.event);
         if (okText) push({ kind: 'success', text: okText });
         return r as T;
       } catch (e) {
@@ -210,8 +249,24 @@ export function BoardPage() {
       run,
       getState: () => stateRef.current!,
       openCard: (n: number) => stateRef.current && navRef.current(`/b/${stateRef.current.board.shortId}/c/${n}${location.search}`),
+      patchCard: (cardId, fn) => setState((s) => (s && s.cards[cardId] ? { ...s, cards: { ...s.cards, [cardId]: fn(s.cards[cardId]) } } : s)),
+      setWatching: (kind, id, on) =>
+        setState((s) => {
+          if (!s) return s;
+          const key = kind === 'card' ? 'watchedCardIds' : 'watchedListIds';
+          const ids = s[key].filter((x) => x !== id);
+          return { ...s, [key]: on ? [...ids, id] : ids };
+        }),
+      toggleLabelNames: () =>
+        setLabelNames((v) => {
+          const next = !v;
+          patch('/me', { prefs: { labelNames: next } })
+            .then((r) => setMe(r.user))
+            .catch(() => undefined); // still toggled for this session
+          return next;
+        }),
     }),
-    [ingest, load, announce, run],
+    [ingest, load, announce, run, setMe],
   );
   const ctx: BoardCtx | null = useMemo(() => state && { ...actions, state, editing, presence }, [actions, state, editing, presence]);
 
@@ -264,7 +319,8 @@ export function BoardPage() {
     colCache.current = out;
     return out;
   }, [cols, cardsMap]);
-  const view = useCardView(state);
+  const view = useCardView(state, labelNames);
+  const hasTemplates = useMemo(() => Object.values(cardsMap ?? {}).some((c) => c.isTemplate && !c.archivedAt), [cardsMap]);
   const findList = (c: Cols, cardId: string) => Object.keys(c).find((l) => c[l].includes(cardId));
 
   const commitCardMove = useCallback(
@@ -331,6 +387,7 @@ export function BoardPage() {
   const onDragStart = (e: DragStartEvent) => {
     const id = String(e.active.id);
     setActiveDrag(id);
+    setCardPop(null);
     if (id.startsWith('card:')) setDragCols({ ...baseCols });
   };
   const onDragOver = (e: DragOverEvent) => {
@@ -372,11 +429,70 @@ export function BoardPage() {
     commitCardMove(cardId, listId, ordered);
   };
 
-  // Keyboard alternative to dragging (WCAG 2.5.7): Space picks up, arrows move, Enter/Space drops, Esc cancels.
-  const focusCard = (cardId: string) => window.requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-card-id="${cardId}"]`)?.focus());
+  // ---- card shortcuts (focused card, or the card under the pointer) ----
+  const tileOf = (cardId: string) => document.querySelector<HTMLElement>(`[data-card-id="${cardId}"]`);
+  const focusCard = (cardId: string) => window.requestAnimationFrame(() => tileOf(cardId)?.focus());
   const listName = (id: string) => state?.lists[id]?.name ?? '';
+  const archiveCard = (card: Card) => {
+    run(() => post(`/cards/${card.id}/archive`)).then((r) => {
+      if (!r) return;
+      lastArchived.current = { kind: 'card', id: card.id, name: card.name };
+      push({
+        kind: 'info',
+        text: `Archived “${card.name}”. Press z to undo.`,
+        action: { label: 'Undo', run: () => run(() => post(`/cards/${card.id}/restore`)) },
+      });
+    });
+  };
+  const toggleWatch = (card: Card) => {
+    const on = !state!.watchedCardIds.includes(card.id);
+    actions.setWatching('card', card.id, on);
+    run(() => (on ? put : del)(`/cards/${card.id}/watch`), on ? `Watching “${card.name}”` : `Stopped watching “${card.name}”`).then((r) => {
+      if (!r) actions.setWatching('card', card.id, !on);
+    });
+  };
+  /** Shortcuts that act on one card, shared by the focused-card handler and the hovered-card handler. Returns true if handled. */
+  const cardShortcut = (key: string, card: Card): boolean => {
+    if (!state) return false;
+    const can = state.access.can;
+    const el = tileOf(card.id);
+    const pop = (kind: CardPopKind) => {
+      if (!can.edit) {
+        announce('You can’t change cards on this board.');
+        return true;
+      }
+      if (el) setCardPop({ kind, cardId: card.id, anchor: el });
+      return true;
+    };
+    switch (key) {
+      case 'e':
+        return pop('quick');
+      case 'l':
+        return pop('labels');
+      case 'm':
+        return pop('members');
+      case 'd':
+        return pop('dates');
+      case 't':
+        nav(`/b/${state.board.shortId}/c/${card.number}${location.search}`, { state: { edit: 'title' } });
+        return true;
+      case '-':
+        nav(`/b/${state.board.shortId}/c/${card.number}${location.search}`, { state: { open: 'checklist' } });
+        return true;
+      case 's':
+        toggleWatch(card);
+        return true;
+      case 'c':
+        if (!can.edit) return false;
+        archiveCard(card);
+        return true;
+    }
+    return false;
+  };
+
+  // Keyboard alternative to dragging (WCAG 2.5.7): Space picks up, arrows move, Enter/Space drops, Esc cancels.
   const onCardKey = (e: React.KeyboardEvent, card: Card) => {
-    if (!state || me?.prefs.shortcuts === false && !['Enter', ' ', 'Escape'].includes(e.key)) return;
+    if (!state || (me?.prefs.shortcuts === false && !['Enter', ' ', 'Escape'].includes(e.key))) return;
     const can = state.access.can;
     const listIds = lists.map((l) => l.id);
     if (kbMove) {
@@ -419,6 +535,7 @@ export function BoardPage() {
       return;
     }
     if (isTypingTarget(e.target) && e.target !== e.currentTarget) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     const from = card.listId;
     const ids = cols[from] ?? [];
     const idx = ids.indexOf(card.id);
@@ -426,24 +543,24 @@ export function BoardPage() {
       case 'Enter':
         e.preventDefault();
         nav(`/b/${state.board.shortId}/c/${card.number}${location.search}`);
-        break;
+        return;
       case ' ':
         e.preventDefault();
         if (!can.edit) return announce('You can’t move cards on this board.');
         setDragCols({ ...baseCols });
         setKbMove({ cardId: card.id });
         announce(`Picked up “${card.name}”. Use the arrow keys to move it, Enter to drop, Escape to cancel.`);
-        break;
+        return;
       case 'ArrowDown':
       case 'j':
         e.preventDefault();
         if (idx + 1 < ids.length) focusCard(ids[idx + 1]);
-        break;
+        return;
       case 'ArrowUp':
       case 'k':
         e.preventDefault();
         if (idx > 0) focusCard(ids[idx - 1]);
-        break;
+        return;
       case 'ArrowLeft':
       case 'ArrowRight': {
         e.preventDefault();
@@ -451,45 +568,59 @@ export function BoardPage() {
         do li += e.key === 'ArrowLeft' ? -1 : 1;
         while (li >= 0 && li < listIds.length && !cols[listIds[li]]?.length);
         if (li >= 0 && li < listIds.length) focusCard(cols[listIds[li]][Math.min(Math.max(idx, 0), cols[listIds[li]].length - 1)]);
-        break;
+        return;
       }
       case ',':
-      case '.': {
+      case '.':
+      case '<':
+      case '>': {
         e.preventDefault();
         if (!can.edit) return;
-        const li = listIds.indexOf(from) + (e.key === ',' ? -1 : 1);
+        const li = listIds.indexOf(from) + (e.key === ',' || e.key === '<' ? -1 : 1);
         if (li < 0 || li >= listIds.length) return;
         const to = listIds[li];
-        commitCardMove(card.id, to, [...(cols[to] ?? []), card.id]);
-        announce(`Moved “${card.name}” to ${listName(to)}.`);
+        const top = e.key === '<' || e.key === '>';
+        commitCardMove(card.id, to, top ? [card.id, ...(cols[to] ?? [])] : [...(cols[to] ?? []), card.id]);
+        announce(`Moved “${card.name}” to the ${top ? 'top' : 'bottom'} of ${listName(to)}.`);
         focusCard(card.id);
-        break;
+        return;
       }
       case 'c':
         e.preventDefault();
-        if (!can.edit) return;
-        run(() => post(`/cards/${card.id}/archive`)).then((r) => {
-          if (r)
-            push({
-              kind: 'info',
-              text: `Archived “${card.name}”.`,
-              action: { label: 'Undo', run: () => run(() => post(`/cards/${card.id}/restore`)) },
-            });
-        });
-        if (idx + 1 < ids.length) focusCard(ids[idx + 1]);
-        else if (idx > 0) focusCard(ids[idx - 1]);
-        break;
+        if (cardShortcut('c', card)) {
+          if (idx + 1 < ids.length) focusCard(ids[idx + 1]);
+          else if (idx > 0) focusCard(ids[idx - 1]);
+        }
+        return;
+    }
+    if (cardShortcut(e.key, card)) {
+      e.preventDefault();
+      e.stopPropagation();
     }
   };
-
   const cardKeyRef = useRef(onCardKey);
   cardKeyRef.current = onCardKey;
   const stableCardKey = useCallback((e: React.KeyboardEvent, c: Card) => cardKeyRef.current(e, c), []);
+  const onHover = useCallback((cardId: string | null) => {
+    hovered.current = cardId;
+  }, []);
+
+  const toggleCollapsed = useCallback((listId: string) => {
+    setCollapsed((c) => {
+      const next = c.includes(listId) ? c.filter((x) => x !== listId) : [...c, listId];
+      storage.set(`fd:collapsed:${boardIdRef.current}`, next);
+      return next;
+    });
+  }, []);
+  const onListArchived = useCallback((l: List) => {
+    lastArchived.current = { kind: 'list', id: l.id, name: l.name };
+  }, []);
 
   // Board-level shortcuts.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isTypingTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('.modal') || me?.prefs.shortcuts === false) return;
+      if (isTypingTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('.modal, .popover') || me?.prefs.shortcuts === false) return;
+      if ((e.target as HTMLElement | null)?.closest?.('[data-card-id]')) return; // the focused card handles its own keys
       if (e.key === 'f') {
         e.preventDefault();
         setShowFilter(true);
@@ -499,12 +630,22 @@ export function BoardPage() {
       } else if (e.key === 'q') {
         e.preventDefault();
         setFilter({ members: filter.members.includes(me!.id) ? [] : [me!.id] });
+      } else if (e.key === ';') {
+        e.preventDefault();
+        actions.toggleLabelNames();
+      } else if (e.key === 'z' && lastArchived.current) {
+        e.preventDefault();
+        const last = lastArchived.current;
+        lastArchived.current = null;
+        run(() => post(`/${last.kind === 'card' ? 'cards' : 'lists'}/${last.id}/restore`), `Restored “${last.name}”`);
       } else if (e.key === 'n') {
         const list = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-list-id]') ?? document.querySelector<HTMLElement>('[data-list-id]');
         if (list) {
           e.preventDefault();
           list.querySelector<HTMLButtonElement>('.add-card-btn')?.click();
         }
+      } else if (hovered.current && state?.cards[hovered.current]) {
+        if (cardShortcut(e.key, state.cards[hovered.current])) e.preventDefault();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -518,121 +659,165 @@ export function BoardPage() {
         message={error === 'deleted' ? 'This board was deleted.' : 'You no longer have access to this board. Ask a board admin if you think this is a mistake.'}
       />
     );
-  if (!state || !ctx) return <BoardSkeleton />;
+  if (!state || !ctx || !view) return <BoardSkeleton />;
 
   const { board, access } = state;
   const visibleCount = (listId: string) => cols[listId]?.length ?? 0;
   const totalCount = (listId: string) => totals[listId] ?? 0;
   const activeCard = activeDrag?.startsWith('card:') ? state.cards[activeDrag.slice(5)] : null;
   const online = presence.filter((id) => id !== me!.id);
+  const shownTotal = Object.values(baseCols).reduce((a, c) => a + c.length, 0);
+  const popCard = cardPop ? state.cards[cardPop.cardId] : null;
+  const closePop = () => setCardPop(null);
 
   return (
     <BoardActionsContext.Provider value={actions}>
-    <BoardContext.Provider value={ctx}>
-      <div className={`board bg-${board.background}`}>
-        <div className="board-header">
-          <BoardTitle />
-          <button
-            className="icon-btn on-dark"
-            aria-pressed={!!board.starred}
-            aria-label={board.starred ? 'Unstar board' : 'Star board'}
-            onClick={async () => {
-              const starred = !board.starred;
-              await (starred ? put : del)(`/boards/${board.id}/star`);
-              setState((s) => (s ? { ...s, board: { ...s.board, starred } } : s));
-            }}
-          >
-            {board.starred ? '★' : '☆'}
-          </button>
-          <span className="pill on-dark">{board.visibility === 'private' ? 'Private' : 'Workspace'}</span>
-          <span className="pill on-dark hide-sm">{state.workspace.name}</span>
-          <span className="pill on-dark" title="Your role on this board">
-            {access.role === 'viewer' ? 'Viewing' : access.role}
-          </span>
-          <div className="grow" />
-          <div className="member-stack" aria-label="Board members">
-            {state.members.slice(0, 6).map((m) => (
-              <span key={m.id} className={`member-dot ${online.includes(m.id) ? 'online' : ''}`}>
-                <Avatar user={m} size={28} title={`${m.fullName}${online.includes(m.id) ? ' (viewing now)' : ''}`} />
+      <BoardContext.Provider value={ctx}>
+        <div className={`board bg-${board.background}`}>
+          <div className="board-header">
+            <BoardTitle />
+            <button
+              className="icon-btn on-dark"
+              aria-pressed={!!board.starred}
+              aria-label={board.starred ? 'Unstar board' : 'Star board'}
+              title={board.starred ? 'Unstar board' : 'Star board'}
+              onClick={async () => {
+                const starred = !board.starred;
+                setState((s) => (s ? { ...s, board: { ...s.board, starred } } : s));
+                await (starred ? put : del)(`/boards/${board.id}/star`).catch((e) => {
+                  setState((s) => (s ? { ...s, board: { ...s.board, starred: !starred } } : s));
+                  push({ kind: 'error', text: (e as Error).message });
+                });
+              }}
+            >
+              <Star size={18} fill={board.starred ? 'currentColor' : 'none'} />
+            </button>
+            <span className="pill on-dark" title={board.visibility === 'private' ? 'Only board members can see this board' : `Everyone in ${state.workspace.name} can see this board`}>
+              {board.visibility === 'private' ? <Lock size={14} /> : <Building2 size={14} />}
+              <span className="hide-sm">{board.visibility === 'private' ? 'Private' : state.workspace.name}</span>
+            </span>
+            {board.isTemplate && <span className="pill on-dark">Template</span>}
+            {board.watching && (
+              <span className="pill on-dark hide-sm" title="You are watching this board">
+                <Eye size={14} />
+                <span className="visually-hidden">Watching</span>
               </span>
-            ))}
-            {state.members.length > 6 && <span className="pill on-dark">+{state.members.length - 6}</span>}
-          </div>
-          {access.can.join && !access.boardRole && (
-            <button className="btn btn-primary btn-small" onClick={() => run(() => post(`/boards/${board.id}/join`), 'You joined this board').then(() => load())}>
-              Join board
-            </button>
-          )}
-          <button className="btn btn-light btn-small" onClick={() => setShowMembers(true)}>
-            Share
-          </button>
-          <button className={`btn btn-small ${filterActive ? 'btn-primary' : 'btn-light'}`} onClick={() => setShowFilter((v) => !v)} aria-expanded={showFilter} aria-keyshortcuts="f">
-            Filter{filterActive ? ` · ${Object.values(baseCols).reduce((a, c) => a + c.length, 0)} shown` : ''}
-          </button>
-          {filterActive && (
-            <button className="btn btn-light btn-small" onClick={() => setFilter({ q: '', members: [], labels: [], due: '', status: '' })} aria-keyshortcuts="x">
-              Clear
-            </button>
-          )}
-          <button className="btn btn-light btn-small" onClick={() => setShowMenu(true)} aria-label="Board menu">
-            ⋯ Menu
-          </button>
-        </div>
-        {board.closedAt && (
-          <div className="board-banner" role="status">
-            This board is closed and read-only.{' '}
-            {access.can.admin && (
-              <button className="btn btn-small btn-light" onClick={() => run(() => post(`/boards/${board.id}/reopen`), 'Board reopened')}>
-                Reopen board
+            )}
+            <span className="pill on-dark hide-sm" title="Your role on this board">
+              {access.role === 'viewer' ? 'Viewing' : access.role}
+            </span>
+            <div className="grow" />
+            <div className="member-stack" aria-label="Board members">
+              {state.members.slice(0, 5).map((m) => (
+                <span key={m.id} className={`member-dot ${online.includes(m.id) ? 'online' : ''}`}>
+                  <Avatar user={m} size={28} title={`${m.fullName}${online.includes(m.id) ? ' (viewing now)' : ''}`} />
+                </span>
+              ))}
+              {state.members.length > 5 && <span className="pill on-dark">+{state.members.length - 5}</span>}
+            </div>
+            {access.can.join && !access.boardRole && (
+              <button className="btn btn-primary btn-small" onClick={() => run(() => post(`/boards/${board.id}/join`), 'You joined this board').then(() => load())}>
+                Join board
               </button>
             )}
+            <button
+              className={`btn btn-small header-btn ${filterActive ? 'active' : ''}`}
+              onClick={() => setShowFilter((v) => !v)}
+              aria-expanded={showFilter}
+              aria-keyshortcuts="f"
+              aria-label={filterActive ? `Filter, ${shownTotal} cards shown` : 'Filter'}
+            >
+              <ListFilter size={16} />
+              <span className="hide-sm">{filterActive ? `${shownTotal} shown` : 'Filter'}</span>
+            </button>
+            {filterActive && (
+              <button className="btn btn-small header-btn" onClick={() => setFilter({ q: '', members: [], labels: [], due: '', status: '' })} aria-keyshortcuts="x" aria-label="Clear filters">
+                <X size={16} />
+                <span className="hide-sm">Clear</span>
+              </button>
+            )}
+            <button className="btn btn-small btn-light share-btn" onClick={() => setShowMembers(true)} aria-label="Share">
+              <UserPlus size={16} />
+              <span className="hide-sm">Share</span>
+            </button>
+            <button className="icon-btn on-dark" onClick={() => setShowMenu(true)} aria-label="Board menu" title="Board menu">
+              <Ellipsis size={20} />
+            </button>
           </div>
-        )}
-        {!access.can.edit && !board.closedAt && (
-          <div className="board-banner" role="status">
-            {access.role === 'observer' ? 'You are an observer on this board: you can view and comment, but not change cards.' : 'You can view this board but not change it.'}
-            {access.can.join && ' Join the board to start editing.'}
+          {board.closedAt && (
+            <div className="board-banner" role="status">
+              This board is closed and read-only.{' '}
+              {access.can.admin && (
+                <button className="btn btn-small btn-light" onClick={() => run(() => post(`/boards/${board.id}/reopen`), 'Board reopened')}>
+                  Reopen board
+                </button>
+              )}
+            </div>
+          )}
+          {!access.can.edit && !board.closedAt && (
+            <div className="board-banner" role="status">
+              {access.role === 'observer' ? 'You are an observer on this board: you can view and comment, but not change cards.' : 'You can view this board but not change it.'}
+              {access.can.join && ' Join the board to start editing.'}
+            </div>
+          )}
+          {showFilter && <FilterPanel filter={filter} setFilter={setFilter} onClose={() => setShowFilter(false)} />}
+          <div className="board-canvas" aria-label={`${board.name} lists`}>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={collisions}
+              // Scroll by finger/pointer position: on phones a card is ~85% of the screen wide, so rect-based auto-scroll never stops.
+              autoScroll={{ activator: AutoScrollActivator.Pointer, threshold: { x: 0.15, y: 0.15 }, acceleration: 6 }}
+              onDragStart={onDragStart}
+              onDragOver={onDragOver}
+              onDragEnd={onDragEnd}
+              onDragCancel={() => (setDragCols(null), setActiveDrag(null))}
+            >
+              <SortableContext items={lists.map((l) => `list:${l.id}`)} strategy={horizontalListSortingStrategy} disabled={!access.can.edit}>
+                <ol className="lists">
+                  {lists.map((l) => (
+                    <ListColumn
+                      key={l.id}
+                      list={l}
+                      cards={colCards[l.id] ?? EMPTY}
+                      countText={filterActive ? `${visibleCount(l.id)} of ${totalCount(l.id)}` : String(totalCount(l.id))}
+                      onCardKey={stableCardKey}
+                      onHover={onHover}
+                      movingCardId={kbMove && cols[l.id]?.includes(kbMove.cardId) ? kbMove.cardId : null}
+                      allLists={lists}
+                      view={view}
+                      watching={state.watchedListIds.includes(l.id)}
+                      collapsed={collapsed.includes(l.id)}
+                      onToggleCollapsed={toggleCollapsed}
+                      onCardAction={setCardPop}
+                      onArchived={onListArchived}
+                      hasTemplates={hasTemplates}
+                    />
+                  ))}
+                  {access.can.edit && <AddList />}
+                </ol>
+              </SortableContext>
+              <DragOverlay>{activeCard ? <CardTile card={activeCard} overlay view={view} /> : null}</DragOverlay>
+            </DndContext>
+            {lists.length === 0 && !access.can.edit && <p className="board-empty">This board has no lists yet.</p>}
           </div>
-        )}
-        {showFilter && <FilterPanel filter={filter} setFilter={setFilter} onClose={() => setShowFilter(false)} />}
-        <div className="board-canvas" aria-label={`${board.name} lists`}>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={collisions}
-            // Scroll by finger/pointer position: on phones a card is ~85% of the screen wide, so rect-based auto-scroll never stops.
-            autoScroll={{ activator: AutoScrollActivator.Pointer, threshold: { x: 0.15, y: 0.15 }, acceleration: 6 }} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => (setDragCols(null), setActiveDrag(null))}>
-            <SortableContext items={lists.map((l) => `list:${l.id}`)} strategy={horizontalListSortingStrategy} disabled={!access.can.edit}>
-              <ol className="lists">
-                {lists.map((l) => (
-                  <ListColumn
-                    key={l.id}
-                    list={l}
-                    cards={colCards[l.id] ?? EMPTY}
-                    countText={filterActive ? `${visibleCount(l.id)} of ${totalCount(l.id)}` : String(totalCount(l.id))}
-                    onCardKey={stableCardKey}
-                    movingCardId={kbMove && cols[l.id]?.includes(kbMove.cardId) ? kbMove.cardId : null}
-                    allLists={lists}
-                    view={view!}
-                    watching={state.watchedListIds.includes(l.id)}
-                  />
-                ))}
-                {access.can.edit && <AddList />}
-              </ol>
-            </SortableContext>
-            <DragOverlay>{activeCard ? <CardTile card={activeCard} overlay view={view!} /> : null}</DragOverlay>
-          </DndContext>
-          {lists.length === 0 && !access.can.edit && <p className="board-empty">This board has no lists yet.</p>}
+          <p id="card-help" className="visually-hidden">
+            Enter opens the card. Space picks it up to move with the arrow keys. E: quick edit, L: labels, M: members, D: dates, C: archive.
+          </p>
+          <div id="board-announcer" className="visually-hidden" aria-live="assertive" aria-atomic="true">
+            {announcement}
+          </div>
         </div>
-        <div id="board-announcer" className="visually-hidden" aria-live="assertive" aria-atomic="true">
-          {announcement}
-        </div>
-      </div>
-      <Suspense fallback={null}>
-        {cardNumber && <CardModal key={cardNumber} number={Number(cardNumber)} onClose={() => nav(`/b/${board.shortId}${location.search}`)} />}
-        {showMenu && <BoardMenu onClose={() => setShowMenu(false)} />}
-        {showMembers && <MembersDialog onClose={() => setShowMembers(false)} />}
-      </Suspense>
-    </BoardContext.Provider>
+        {cardPop && popCard && cardPop.kind === 'quick' && <QuickEdit card={popCard} anchor={cardPop.anchor} view={view} onClose={closePop} onAction={setCardPop} />}
+        {cardPop && popCard && cardPop.kind === 'labels' && <LabelsPicker card={popCard} anchor={cardPop.anchor} onClose={closePop} />}
+        {cardPop && popCard && cardPop.kind === 'members' && <MembersPicker card={popCard} anchor={cardPop.anchor} onClose={closePop} />}
+        {cardPop && popCard && cardPop.kind === 'dates' && <DatesPicker card={popCard} anchor={cardPop.anchor} onClose={closePop} />}
+        {cardPop && popCard && cardPop.kind === 'move' && <MoveCardPicker card={popCard} anchor={cardPop.anchor} onClose={closePop} onMoved={(p) => p && nav(p)} />}
+        <Suspense fallback={null}>
+          {cardNumber && <CardModal key={cardNumber} number={Number(cardNumber)} onClose={() => nav(`/b/${board.shortId}${location.search}`)} />}
+          {showMenu && <BoardMenu onClose={() => setShowMenu(false)} />}
+          {showMembers && <MembersDialog onClose={() => setShowMembers(false)} />}
+        </Suspense>
+      </BoardContext.Provider>
     </BoardActionsContext.Provider>
   );
 }
@@ -671,7 +856,6 @@ function BoardTitle() {
     </form>
   );
 }
-
 
 function BoardSkeleton() {
   return (

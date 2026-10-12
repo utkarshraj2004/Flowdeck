@@ -33,8 +33,25 @@ test('axe: no serious or critical violations on key screens', async ({ page, con
     await page.waitForTimeout(300);
     report[name] = await seriousViolations(page);
   }
+  // Open layers: label popover with the colour palette, the card actions menu, the quick editor, notifications.
+  await page.goto(`/b/${board.shortId}/c/${card.number}`);
+  await page.getByRole('toolbar', { name: 'Add to card' }).getByRole('button', { name: 'Labels' }).click();
+  await page.getByRole('button', { name: 'Create a new label' }).click();
+  report.labelPopover = await seriousViolations(page);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Card actions' }).click();
+  report.cardActions = await seriousViolations(page);
+  await page.goto(`/b/${board.shortId}`);
+  await page.locator('[data-card-id]').first().focus();
+  await page.keyboard.press('e');
+  await page.getByRole('dialog', { name: /Quick edit/ }).waitFor();
+  report.quickEdit = await seriousViolations(page);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: /^Notifications/ }).click();
+  await page.waitForTimeout(300);
+  report.notifications = await seriousViolations(page);
   await page.context().clearCookies();
   await page.goto('/login');
   report.login = await seriousViolations(page);
-  expect(report).toEqual({ home: [], board: [], card: [], search: [], account: [], workspace: [], login: [] });
+  expect(report).toEqual({ home: [], board: [], card: [], search: [], account: [], workspace: [], labelPopover: [], cardActions: [], quickEdit: [], notifications: [], login: [] });
 });

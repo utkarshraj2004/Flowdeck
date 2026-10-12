@@ -30,6 +30,7 @@ export interface Card {
   dueComplete: boolean;
   cover: { color?: string; attachmentId?: string } | null;
   archivedAt: string | null;
+  isTemplate?: boolean;
   labelIds: string[];
   memberIds: string[];
   badges: { description: boolean; comments: number; attachments: number; checkItems: number; checkItemsChecked: number };
@@ -52,6 +53,7 @@ export interface Board {
   closedAt: string | null;
   starred?: boolean;
   watching?: boolean;
+  isTemplate?: boolean;
 }
 export interface BoardState {
   board: Board;
@@ -62,6 +64,7 @@ export interface BoardState {
   lists: Record<string, List>;
   cards: Record<string, Card>;
   watchedListIds: string[];
+  watchedCardIds: string[];
 }
 export interface BoardEvent {
   type: 'event';
@@ -83,6 +86,7 @@ export function fromSnapshot(s: any): BoardState {
     lists: Object.fromEntries(s.lists.map((l: List) => [l.id, l])),
     cards: Object.fromEntries(s.cards.map((c: Card) => [c.id, c])),
     watchedListIds: s.watchedListIds ?? [],
+    watchedCardIds: s.watchedCardIds ?? [],
   };
 }
 
@@ -202,6 +206,10 @@ export function describeActivity(item: { type: string; summary: any }, opts: { o
       return `moved list “${s.name}” here from board “${s.fromBoard}”`;
     case 'list.cards_archived':
       return `archived all ${s.count} card(s) in “${s.name}”`;
+    case 'list.cards_sorted':
+      return `sorted the cards in “${s.name}” by ${({ name: 'name', due: 'due date', newest: 'newest first', oldest: 'oldest first' } as Record<string, string>)[s.by] ?? s.by}`;
+    case 'check_item.converted':
+      return `turned the checklist item “${s.itemName}” into card #${s.newCardNumber}`;
     case 'list.cards_moved':
       return `moved ${s.count} card(s) from “${s.from}” to “${s.to}”`;
     case 'card.created':

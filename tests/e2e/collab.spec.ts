@@ -45,11 +45,11 @@ test('first admin sets up, invites a teammate, and both work on the same board l
   await b.getByRole('link', { name: /Team board/ }).click();
   await expect(b.getByText('You can view this board but not change it.')).toBeVisible();
   await b.getByRole('button', { name: 'Join board' }).click();
-  await expect(list(b, 'To do').getByRole('button', { name: '+ Add a card' })).toBeVisible();
+  await expect(list(b, 'To do').getByRole('button', { name: 'Add a card', exact: true })).toBeVisible();
 
   // A adds a card; B sees it without reloading.
   await a.goto(boardUrl);
-  await list(a, 'To do').getByRole('button', { name: '+ Add a card' }).click();
+  await list(a, 'To do').getByRole('button', { name: 'Add a card', exact: true }).click();
   await a.getByLabel('Card title').fill('Hello from Olivia');
   await a.keyboard.press('Enter');
   const t0 = Date.now();
@@ -225,9 +225,10 @@ test('permissions in the UI: observer is read-only, outsiders get not-found, rem
   const b = await ctxB.newPage();
   await b.goto(`/b/${board.shortId}`);
   await expect(b.getByText(/You are an observer on this board/)).toBeVisible();
-  await expect(b.getByRole('button', { name: '+ Add a card' })).toHaveCount(0);
+  await expect(b.getByRole('button', { name: 'Add a card', exact: true })).toHaveCount(0);
   await b.getByText('Look, don’t touch').click();
-  await expect(b.getByRole('heading', { name: 'Add to card' })).toHaveCount(0);
+  await expect(b.getByRole('toolbar', { name: 'Add to card' })).toHaveCount(0);
+  await expect(b.getByRole('button', { name: 'Card actions' })).toBeVisible(); // copy, watch and copy link stay available
   await b.keyboard.press('Escape');
 
   const c = await ctxC.newPage();
@@ -238,7 +239,7 @@ test('permissions in the UI: observer is read-only, outsiders get not-found, rem
 
   // Role change reaches B live, then removal switches B's view to no-access.
   await apiA.call('PATCH', `/boards/${board.id}/members/${ub.id}`, { role: 'member' });
-  await expect(b.getByRole('button', { name: '+ Add a card' }).first()).toBeVisible();
+  await expect(b.getByRole('button', { name: 'Add a card', exact: true }).first()).toBeVisible();
   const t0 = Date.now();
   await apiA.call('DELETE', `/boards/${board.id}/members/${ub.id}`);
   await expect(b.getByText(/You no longer have access to this board/)).toBeVisible();
@@ -252,10 +253,14 @@ test('attachments: upload through the card, enforce the size limit with a clear 
   const { board, lists } = await seedBoard(api, 'Files board');
   const card = (await api.call('POST', `/lists/${lists[0].id}/cards`, { name: 'With files' })).card;
   await page.goto(`/b/${board.shortId}/c/${card.number}`);
-  await page.getByRole('button', { name: 'Attachment' }).click();
+  const attach = async () => {
+    await page.getByRole('toolbar', { name: 'Add to card' }).getByRole('button', { name: 'Add', exact: true }).click();
+    await page.getByRole('menuitem', { name: /Attachment/ }).click();
+  };
+  await attach();
   await page.getByLabel('Upload a file').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('meeting notes') });
   await expect(page.locator('.attachments').getByRole('link', { name: 'notes.txt' })).toBeVisible();
-  await page.getByRole('button', { name: 'Attachment' }).click();
+  await attach();
   await page.getByLabel('Upload a file').setInputFiles({ name: 'huge.bin', mimeType: 'application/octet-stream', buffer: Buffer.alloc(2 * 1024 * 1024 + 1) });
   await expect(page.getByRole('alert').filter({ hasText: 'File is larger than 2 MB' })).toBeVisible();
   await page.keyboard.press('Escape');

@@ -4,6 +4,11 @@ import { ChevronLeft, X } from './icons';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+const firstFocusable = (el: HTMLElement) =>
+  el.querySelector<HTMLElement>('[data-autofocus]') ??
+  el.querySelector<HTMLElement>('.popover-body input:not([type="checkbox"]), .popover-body textarea') ??
+  el.querySelector<HTMLElement>(`.popover-body ${FOCUSABLE.split(', ').join(', .popover-body ')}`);
+
 /**
  * Open layers (popovers and dialogs), innermost last. Only the innermost layer reacts to Escape and
  * outside clicks, so closing a confirmation never also closes the popover that opened it.
@@ -71,10 +76,15 @@ export function Popover({ anchor, title, onClose, onBack, children, width = 304,
     };
   }, [anchor, width]);
 
+  // If the focused control inside disappears (a step changes, an item is removed), keep focus in the popover.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el && (!document.activeElement || document.activeElement === document.body)) (firstFocusable(el) ?? el).focus();
+  });
+
   useEffect(() => {
     const el = ref.current!;
-    const first = el.querySelector<HTMLElement>('[data-autofocus]') ?? el.querySelector<HTMLElement>('.popover-body input:not([type="checkbox"]), .popover-body textarea') ?? el.querySelector<HTMLElement>(`.popover-body ${FOCUSABLE.split(', ').join(', .popover-body ')}`) ?? el;
-    first.focus();
+    (firstFocusable(el) ?? el).focus();
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node;
       if (!isTop() || el.contains(t) || anchor?.contains(t)) return;
@@ -140,7 +150,7 @@ export function Popover({ anchor, title, onClose, onBack, children, width = 304,
   );
 }
 
-/** Vertical menu with arrow-key navigation (Up/Down/Home/End); items are `button[role=menuitem]`. */
+/** Vertical menu with arrow-key navigation (Up/Down/Home/End); items are `button[role=menuitem]` or `menuitemcheckbox`. */
 export function MenuItems({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div
@@ -148,7 +158,7 @@ export function MenuItems({ label, children }: { label: string; children: ReactN
       aria-label={label}
       className="menu-items"
       onKeyDown={(e) => {
-        const items = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])')];
+        const items = [...e.currentTarget.querySelectorAll<HTMLElement>('[role^="menuitem"]:not([disabled])')];
         const i = items.indexOf(document.activeElement as HTMLElement);
         let next = -1;
         if (e.key === 'ArrowDown') next = (i + 1) % items.length;

@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { BoardEvent, BoardState } from './store';
+import type { BoardEvent, BoardState, Card } from './store';
 
 /** Stable for the life of the board page: never changes identity, so consuming it does not re-render on events. */
 export interface BoardActions {
@@ -11,6 +11,11 @@ export interface BoardActions {
   /** Latest board state, read at call time (for event handlers in memoised components). */
   getState: () => BoardState;
   openCard: (cardNumber: number) => void;
+  /** Show a change to a card at once (optimistic); the server event that follows replaces it. */
+  patchCard: (cardId: string, fn: (c: Card) => Card) => void;
+  /** Local-only state the server does not broadcast to others (the user's own watches). */
+  setWatching: (kind: 'card' | 'list', id: string, on: boolean) => void;
+  toggleLabelNames: () => void;
 }
 
 export interface BoardCtx extends BoardActions {

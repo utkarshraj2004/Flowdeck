@@ -6,6 +6,7 @@ import { AuthProvider } from './auth';
 import { ToastProvider } from './components/Toasts';
 import './styles.css';
 import './styles/shell.css';
+import './styles/board.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
