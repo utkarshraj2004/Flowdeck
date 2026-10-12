@@ -17,7 +17,7 @@ Self-hosted team work management (workspaces → boards → lists → cards) wit
 
 ## Commands
 - Setup: `bash scripts/dev-setup.sh` (runs automatically at session start: `npm ci`, starts the local PostgreSQL, creates role/db `flowdeck`/`flowdeck`).
-- Dev: `npm run dev` (API :8080, web :5173). First admin: `npm run cli -- admin create --email you@example.com`.
+- Dev: `npm run dev` (API :8080, web :5173). First admin: `npm run cli -- admin create --email you@example.com`. Cloud sessions have no port forwarding/web preview: the owner cannot open these ports. Show results with screenshots; the owner runs Flowdeck locally with Docker Compose.
 - `npm run typecheck` · `npm test` · `npm run build` · `npm run test:e2e` (after `npm run build:web`).
 - **`npm run check` before every commit.**
 - Deployment drill: `EXTRA_CA_CERT=/root/.ccr/ca-bundle.crt node scripts/compose-smoke.mjs`. In Claude Code Cloud: start `dockerd` first. Docker Hub is rate-limited there, so `docker pull mirror.gcr.io/library/{postgres:16-alpine,node:22-bookworm-slim}` and `docker tag` them to the plain names.

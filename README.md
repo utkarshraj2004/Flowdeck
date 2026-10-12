@@ -157,7 +157,7 @@ This repository is set up for [Claude Code](https://claude.ai/code) cloud sessio
 | `npm run check` | Everything above, in order: run before every commit |
 | `npm run cli -- admin create --email you@example.com` | Create an admin in the development database |
 
-The development server runs inside the cloud container and is private to your session. Use the session's preview/port link, or ask Claude for screenshots. It is not a place to host Flowdeck for your team.
+The development server runs inside the cloud container and **cannot be opened from your own browser**: Claude Code cloud sessions have no port forwarding or web preview. Ask Claude for screenshots or test results, and to try Flowdeck yourself, run it on your own computer or server with Docker Compose ([Run Flowdeck on your server](#run-flowdeck-on-your-server)). A cloud session is not a place to host Flowdeck for your team.
 
 More in [CONTRIBUTING.md](CONTRIBUTING.md) and [CLAUDE.md](CLAUDE.md).
 
