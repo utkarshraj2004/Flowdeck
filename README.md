@@ -6,6 +6,17 @@ Flowdeck is a kanban-style work-management application that a team runs on its o
 
 ![A Flowdeck board with four lists of cards](docs/screenshots/board.png)
 
+## Try it in your browser (GitHub Codespaces)
+
+You can run Flowdeck without installing anything on your computer: GitHub hosts a temporary development machine (a *codespace*) that you use in your browser.
+
+1. On https://github.com/utkarshraj2004/Flowdeck, switch the branch selector to **`claude/hopeful-galileo-us9nkk`**.
+2. Click **`<> Code`** → **Codespaces** → **Create codespace on claude/hopeful-galileo-us9nkk**, and wait for the editor to open.
+3. In the editor's terminal (<kbd>Ctrl</kbd>+<kbd>`</kbd>), run `flowdeck status` until it shows `Server: ready`. Then run `flowdeck admin you@example.com` and <kbd>Ctrl</kbd>+click the one-time setup link it prints.
+4. Later, open Flowdeck from the **Ports** tab: row **Flowdeck (8080)** → globe icon. The address is **private to your GitHub account**.
+
+This is a **development preview**: it stops when idle, only you can open it, and its data is deleted with the codespace. Codespaces usage is billed by GitHub (free monthly allowance for personal accounts) and is separate from Claude credits. Full guide, including teammates, stop/resume, data and troubleshooting: **[docs/CODESPACES.md](docs/CODESPACES.md)**.
+
 ## Who it is for and what it solves
 
 - **Small and medium teams** (designed for up to ~50 people on one server) who want familiar card-and-list workflows without a SaaS subscription.
@@ -74,6 +85,7 @@ More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), including the stack choice
 | `tests/e2e` | Playwright browser tests (desktop, phone, tablet touch, accessibility) |
 | `scripts/` | `backup.sh`, `restore.sh`, `compose-smoke.mjs` (deployment test), `dev-setup.sh` |
 | `deploy/Caddyfile` | Optional HTTPS reverse proxy |
+| `.devcontainer/` | GitHub Codespaces development preview (Node.js 22 + PostgreSQL 16, `flowdeck` helper command) |
 | `docs/` | Architecture, operations, implementation checklist, handoff, screenshots |
 | `research/` | **Reference material**, not product documentation: the product research and specification Flowdeck was built from |
 
@@ -157,7 +169,9 @@ This repository is set up for [Claude Code](https://claude.ai/code) cloud sessio
 | `npm run check` | Everything above, in order: run before every commit |
 | `npm run cli -- admin create --email you@example.com` | Create an admin in the development database |
 
-The development server runs inside the cloud container and **cannot be opened from your own browser**: Claude Code cloud sessions have no port forwarding or web preview. Ask Claude for screenshots or test results, and to try Flowdeck yourself, run it on your own computer or server with Docker Compose ([Run Flowdeck on your server](#run-flowdeck-on-your-server)). A cloud session is not a place to host Flowdeck for your team.
+The development server runs inside the cloud container and **cannot be opened from your own browser**: Claude Code cloud sessions have no port forwarding or web preview. To try Flowdeck yourself without installing anything, use [GitHub Codespaces](docs/CODESPACES.md). A cloud session or codespace is not a place to host Flowdeck for your team.
+
+The project enables the **ECC** (Everything Claude Code) plugin for Claude Code in `.claude/settings.json` (marketplace `affaan-m/ECC`, plugin `ecc@ecc`, project scope); `scripts/dev-setup.sh` adds ECC's common and TypeScript rule packs. Details and the steps after a cloud-session reset are in [docs/HANDOFF.md](docs/HANDOFF.md#ecc-everything-claude-code).
 
 More in [CONTRIBUTING.md](CONTRIBUTING.md) and [CLAUDE.md](CLAUDE.md).
 
@@ -218,6 +232,7 @@ See [docs/IMPLEMENTATION-CHECKLIST.md](docs/IMPLEMENTATION-CHECKLIST.md) for the
 
 ## Documentation
 
+- [docs/CODESPACES.md](docs/CODESPACES.md): try Flowdeck in your browser with GitHub Codespaces (development preview)
 - [docs/OPERATIONS.md](docs/OPERATIONS.md): installation details, configuration, HTTPS, backups, restore, upgrades, troubleshooting
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): stack, design decisions and tradeoffs
 - [docs/IMPLEMENTATION-CHECKLIST.md](docs/IMPLEMENTATION-CHECKLIST.md): complete / partial / pending features

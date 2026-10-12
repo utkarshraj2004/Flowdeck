@@ -27,3 +27,6 @@ data/
 backups/
 *.dump
 web/dist/
+
+# GitHub Codespaces runtime data (database, uploads, generated secrets, logs)
+.codespace-data/

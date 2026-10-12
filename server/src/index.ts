@@ -26,7 +26,9 @@ await app.listen({ host: config.host, port: config.port });
 app.log.info(`Flowdeck listening on ${config.host}:${config.port} (public URL ${config.baseUrl})`);
 const users = await db.query('SELECT count(*)::int AS n FROM users');
 if (users.rows[0].n === 0)
-  app.log.warn('No users yet. Create the first administrator with:  docker compose exec app node dist/server/cli.js admin create --email you@example.com');
+  app.log.warn(
+    `No users yet. Create the first administrator with:  ${process.env.FLOWDECK_ADMIN_HINT || 'docker compose exec app node dist/server/cli.js admin create --email you@example.com'}`,
+  );
 
 for (const sig of ['SIGINT', 'SIGTERM'] as const)
   process.on(sig, async () => {

@@ -17,4 +17,12 @@ if command -v pg_lsclusters >/dev/null 2>&1; then
       su postgres -c "createdb -O flowdeck flowdeck" >/dev/null 2>&1
   fi
 fi
+# ECC (Everything Claude Code) is enabled as a project-scope plugin in .claude/settings.json. Plugins
+# cannot ship rule packs, so copy ECC's common + TypeScript rules into the user's Claude config once the
+# plugin is cached. Only adds missing files; never overwrites or deletes anything.
+ecc_rules="$(ls -d "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/plugins/cache/ecc/ecc/*/rules 2>/dev/null | sort -V | tail -n 1)"
+if [ -n "$ecc_rules" ]; then
+  dest="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/rules/ecc"
+  mkdir -p "$dest" && cp -Rn "$ecc_rules/common" "$ecc_rules/typescript" "$dest/" 2>/dev/null || true
+fi
 exit 0

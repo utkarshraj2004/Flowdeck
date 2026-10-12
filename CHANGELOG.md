@@ -4,6 +4,10 @@ All notable changes to Flowdeck are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added — browser-only preview
+- GitHub Codespaces dev container (`.devcontainer/`, guide in `docs/CODESPACES.md`): Node.js 22 + PostgreSQL 16, background install/build/start that survives resume and rebuild, private forwarded port on one origin, generated database password, and a `flowdeck` helper (`status`, `admin`, `reset-link`, `logs`, `restart`, `stop`).
+- Development: the ECC Claude Code plugin is enabled at project scope; `scripts/dev-setup.sh` adds its common and TypeScript rules.
+
 ### Added — first working version (0.1.0, not yet released)
 - Self-hosted application: Node.js 22 + Fastify 5 server, PostgreSQL 16, React 19 web client, Docker Compose deployment.
 - Accounts: first administrator via a one-time CLI setup link, login and logout, password change, admin-issued reset links, user disable, administration page.

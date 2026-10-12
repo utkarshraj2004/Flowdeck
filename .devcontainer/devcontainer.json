@@ -1,0 +1,37 @@
+// GitHub Codespaces / Dev Containers setup for trying Flowdeck in a browser.
+// Guide: docs/CODESPACES.md. Nothing here is used by the Docker Compose deployment.
+{
+  "name": "Flowdeck (Codespaces preview)",
+  "dockerComposeFile": "compose.yaml",
+  "service": "dev",
+  "runServices": ["dev", "db"],
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "shutdownAction": "stopCompose",
+  "remoteUser": "node",
+  "hostRequirements": { "cpus": 2, "memory": "4gb" },
+
+  // Starts Flowdeck in the background and returns at once (also on every resume).
+  "postStartCommand": "bash .devcontainer/start.sh",
+
+  // One origin for the web client, API and WebSocket. Codespaces keeps forwarded ports private by default.
+  "forwardPorts": [8080],
+  "portsAttributes": {
+    "8080": { "label": "Flowdeck", "protocol": "http", "onAutoForward": "notify" }
+  },
+  "otherPortsAttributes": { "onAutoForward": "ignore" },
+
+  "remoteEnv": {
+    "PATH": "${containerWorkspaceFolder}/.devcontainer/bin:${containerEnv:PATH}"
+  },
+  "customizations": {
+    "codespaces": {
+      "openFiles": ["docs/CODESPACES.md"]
+    },
+    "vscode": {
+      "settings": {
+        "files.watcherExclude": { "**/.codespace-data/**": true },
+        "search.exclude": { "**/.codespace-data": true }
+      }
+    }
+  }
+}

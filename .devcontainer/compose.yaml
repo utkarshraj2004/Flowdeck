@@ -1,0 +1,44 @@
+# Dev container stack for GitHub Codespaces: a Node 22 workspace plus PostgreSQL 16.
+# All runtime state lives in ../.codespace-data (gitignored) inside /workspaces, which
+# survives stopping, resuming and rebuilding the codespace (not deleting it).
+name: flowdeck-codespace
+
+services:
+  dev:
+    image: mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm
+    command: sleep infinity
+    volumes:
+      - ../..:/workspaces:cached
+    depends_on:
+      - db
+    environment:
+      FLOWDECK_DEV_CONTAINER: "1"
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    # The password is generated on first start into a gitignored file; it never enters git or the image.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        # Docker creates a missing bind-mount folder as root; hand it to the workspace user (uid 1000).
+        mkdir -p /state/secrets /state/app /state/run
+        chown 1000:1000 /state /state/secrets /state/app /state/run
+        if [ ! -s /state/secrets/postgres-password ]; then
+          umask 077
+          head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > /state/secrets/postgres-password
+        fi
+        chown 1000:1000 /state/secrets/postgres-password
+        chmod 700 /state/secrets && chmod 600 /state/secrets/postgres-password
+        install -m 600 -o postgres /state/secrets/postgres-password /run/pg-password
+        exec docker-entrypoint.sh postgres
+    environment:
+      POSTGRES_USER: flowdeck
+      POSTGRES_DB: flowdeck
+      POSTGRES_PASSWORD_FILE: /run/pg-password
+      PGDATA: /state/postgres
+    volumes:
+      - ../.codespace-data:/state
+    # No published ports: only the dev container can reach the database.

@@ -13,6 +13,7 @@ Self-hosted team work management (workspaces → boards → lists → cards) wit
 - `web/src/`: `pages/`, `board/` (BoardPage, ListColumn, CardModal, BoardMenu, store), `components/`.
 - `migrations/NNNN_*.sql`: forward-only; never edit a shipped migration.
 - `tests/unit`, `tests/api` (Vitest + real PostgreSQL), `tests/e2e` (Playwright).
+- `.devcontainer/`: GitHub Codespaces preview (`docs/CODESPACES.md`): compose with PostgreSQL, background supervisor, `flowdeck` helper; runtime data in gitignored `.codespace-data/`.
 - `scripts/`: `dev-setup.sh` (SessionStart hook), `backup.sh`, `restore.sh`, `compose-smoke.mjs`, `dependency-notices.mjs`.
 
 ## Commands
@@ -21,6 +22,8 @@ Self-hosted team work management (workspaces → boards → lists → cards) wit
 - `npm run typecheck` · `npm test` · `npm run build` · `npm run test:e2e` (after `npm run build:web`).
 - **`npm run check` before every commit.**
 - Deployment drill: `EXTRA_CA_CERT=/root/.ccr/ca-bundle.crt node scripts/compose-smoke.mjs`. In Claude Code Cloud: start `dockerd` first. Docker Hub is rate-limited there, so `docker pull mirror.gcr.io/library/{postgres:16-alpine,node:22-bookworm-slim}` and `docker tag` them to the plain names.
+- Codespaces preview: the owner's way to open the app in a browser (cloud sessions have no preview). Test changes to `.devcontainer/` locally with `@devcontainers/cli` (`devcontainer up`) under `dockerd`; see `docs/HANDOFF.md`. Never make the forwarded port public.
+- ECC plugin (`ecc@ecc`) is enabled at project scope in `.claude/settings.json`; keep the existing SessionStart hook. Do not also run ECC's manual installer (duplicate hooks).
 - Browser tests use `CHROMIUM_PATH` or `/opt/pw-browsers/chromium` (the installed Playwright version expects a different Chromium build; do not run `playwright install` here).
 
 ## Rules
