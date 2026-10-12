@@ -266,11 +266,13 @@ async function measure(a, b, board, lists) {
     const tile = page.locator('[data-card-id]').filter({ hasText: `Task ${20 + i}:` }).first();
     await tile.scrollIntoViewIfNeeded();
     requests.length = 0;
+    const stopProfile = i === 1 ? await profile(page, 'card-open') : async () => {};
     const t0 = Date.now();
     await tile.click();
     await page.waitForSelector('#card-title button, #card-title');
     await page.waitForFunction(() => !!document.querySelector('[role="dialog"]') && !document.querySelector('[role="dialog"] .skeleton'));
     opens.push(Date.now() - t0);
+    await stopProfile();
     await page.waitForTimeout(300);
     openReqs = requests.length;
     await page.keyboard.press('Escape');
@@ -285,12 +287,14 @@ async function measure(a, b, board, lists) {
     await tile.click();
     await page.waitForFunction(() => !!document.querySelector('[role="dialog"]') && !document.querySelector('[role="dialog"] .skeleton'));
     await page.getByRole('button', { name: 'Labels', exact: true }).click();
-    const box = page.locator('[role="dialog"] input[type="checkbox"]').first();
+    // The first label not yet on the card (label order differs between builds).
+    const box = page.locator('[role="dialog"] input[type="checkbox"]:not(:checked)').first();
     await box.waitFor();
+    const handle = await box.elementHandle();
     requests.length = 0;
     const t0 = Date.now();
-    await box.click();
-    await page.waitForFunction(() => (document.querySelector('[role="dialog"] input[type="checkbox"]')?.checked ?? false) === true);
+    await handle.click();
+    await page.waitForFunction((el) => el.checked === true, handle, { polling: 'raf' });
     out.labelToggleMs = Date.now() - t0;
     await page.waitForTimeout(600);
     out.apiRequestsOnLabelToggle = requests.length;

@@ -4,7 +4,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ApiError, patch, post } from '../api';
 import { useLayer } from '../components/Popover';
-import { Archive, ArrowRight, Circle, CircleCheck, Clock, Eye, LayoutTemplate, MessageSquare, Paperclip, Pencil, SquareCheck, Tag, TextAlignStart, Users } from '../components/icons';
+import { Archive, ArrowRight, Circle, CircleCheck, Clock, Pencil, Tag, Users } from '../components/icons';
 import { useToasts } from '../components/Toasts';
 import { Avatar, colorName, DUE_TEXT, dueState, formatDate } from '../components/ui';
 import { useBoardActions } from './context';
@@ -58,6 +58,8 @@ export const CardTile = memo(function CardTile({
 }) {
   const { openCard, patchCard, run, reload, toggleLabelNames } = useBoardActions();
   const ref = useRef<HTMLDivElement>(null);
+  // Hover/focus-only controls are rendered just for the active card, keeping large boards light.
+  const [hot, setHot] = useState(false);
   const { labels, membersById } = view;
   const cardLabels = labels.filter((l) => card.labelIds.includes(l.id));
   const frontLabels = cardLabels.filter((l) => l.color); // colourless labels show only in the card dialog
@@ -81,6 +83,9 @@ export const CardTile = memo(function CardTile({
     cardLabels.length ? `labels ${cardLabels.map((l) => l.name || colorName(l.color)).join(', ')}` : '',
     card.dueAt ? `${DUE_TEXT[ds]} ${formatDate(card.dueAt)}` : '',
     card.memberIds.length ? `members ${card.memberIds.map((id) => membersById[id]?.fullName).filter(Boolean).join(', ')}` : '',
+    b.comments ? `${b.comments} comment${b.comments === 1 ? '' : 's'}` : '',
+    b.attachments ? `${b.attachments} attachment${b.attachments === 1 ? '' : 's'}` : '',
+    b.checkItems ? `checklist ${b.checkItemsChecked} of ${b.checkItems} done` : '',
   ]
     .filter(Boolean)
     .join(', ');
@@ -96,8 +101,10 @@ export const CardTile = memo(function CardTile({
       aria-describedby={overlay ? undefined : 'card-help'}
       onClick={() => !overlay && openCard(card.number)}
       onKeyDown={(e) => onKey?.(e, card)}
-      onMouseEnter={() => onHover?.(card.id)}
-      onMouseLeave={() => onHover?.(null)}
+      onMouseEnter={() => (onHover?.(card.id), setHot(true))}
+      onMouseLeave={() => (onHover?.(null), setHot(false))}
+      onFocus={() => setHot(true)}
+      onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setHot(false)}
     >
       {card.cover?.color && <div className={`card-cover label-${card.cover.color}`} aria-hidden="true" />}
       {coverImg && <img className="card-cover-img" src={coverImg} alt="" loading="lazy" />}
@@ -121,7 +128,7 @@ export const CardTile = memo(function CardTile({
           </div>
         )}
         <div className="card-title-row">
-          {interactive && !card.isTemplate && (
+          {interactive && !card.isTemplate && (hot || card.dueComplete) && (
             <button
               type="button"
               tabIndex={-1}
@@ -138,43 +145,41 @@ export const CardTile = memo(function CardTile({
         </div>
         <div className="card-badges">
           {card.isTemplate && (
-            <span className="badge badge-template">
-              <LayoutTemplate size={13} aria-hidden="true" /> Template
+            <span className="badge badge-template ci i-template">
+              Template
             </span>
           )}
           {watching && (
-            <span className="badge" title="You are watching this card">
-              <Eye size={14} aria-hidden="true" />
+            <span className="badge ci i-eye" title="You are watching this card">
               <span className="visually-hidden">Watching</span>
             </span>
           )}
           {card.dueAt && (
-            <span className={`badge due-${ds}`} title={`${DUE_TEXT[ds]}: ${formatDate(card.dueAt)}`}>
-              <Clock size={13} aria-hidden="true" /> {card.startAt ? `${formatDate(card.startAt, false)} – ` : ''}
+            <span className={`badge ci i-clock due-${ds}`} title={`${DUE_TEXT[ds]}: ${formatDate(card.dueAt)}`}>
+              {card.startAt ? `${formatDate(card.startAt, false)} – ` : ''}
               {formatDate(card.dueAt, false)}
               <span className="visually-hidden"> {DUE_TEXT[ds]}</span>
             </span>
           )}
           {b.description && (
-            <span className="badge" title="This card has a description">
-              <TextAlignStart size={14} aria-hidden="true" />
+            <span className="badge ci i-desc" title="This card has a description">
               <span className="visually-hidden">Has a description</span>
             </span>
           )}
           {b.comments > 0 && (
-            <span className="badge" title={`${b.comments} comment${b.comments === 1 ? '' : 's'}`}>
-              <MessageSquare size={13} aria-hidden="true" /> {b.comments}
+            <span className="badge ci i-comment" title={`${b.comments} comment${b.comments === 1 ? '' : 's'}`}>
+              {b.comments}
               <span className="visually-hidden"> comments</span>
             </span>
           )}
           {b.attachments > 0 && (
-            <span className="badge" aria-label={`${b.attachments} attachments`} title={`${b.attachments} attachment${b.attachments === 1 ? '' : 's'}`}>
-              <Paperclip size={13} aria-hidden="true" /> {b.attachments}
+            <span className="badge ci i-clip" aria-label={`${b.attachments} attachments`} title={`${b.attachments} attachment${b.attachments === 1 ? '' : 's'}`}>
+              {b.attachments}
             </span>
           )}
           {b.checkItems > 0 && (
-            <span className={`badge ${b.checkItems === b.checkItemsChecked ? 'due-complete' : ''}`} title={`Checklist items: ${b.checkItemsChecked} of ${b.checkItems} done`}>
-              <SquareCheck size={13} aria-hidden="true" /> {b.checkItemsChecked}/{b.checkItems}
+            <span className={`badge ci i-check ${b.checkItems === b.checkItemsChecked ? 'due-complete' : ''}`} title={`Checklist items: ${b.checkItemsChecked} of ${b.checkItems} done`}>
+              {b.checkItemsChecked}/{b.checkItems}
             </span>
           )}
           {card.memberIds.length > 0 && (
@@ -184,7 +189,7 @@ export const CardTile = memo(function CardTile({
           )}
         </div>
       </div>
-      {interactive && onAction && (
+      {interactive && onAction && hot && (
         <button
           type="button"
           tabIndex={-1}
@@ -257,7 +262,8 @@ export function QuickEdit({ card, anchor, view, onClose, onAction }: { card: Car
     <div
       className="quick-edit-backdrop"
       onPointerDown={(e) => {
-        if (e.target === e.currentTarget && isTop()) closeRef.current();
+        // Clicking outside saves an edited title (nothing typed is thrown away); an unchanged one just closes.
+        if (e.target === e.currentTarget && isTop()) save(base.current);
       }}
     >
       <div

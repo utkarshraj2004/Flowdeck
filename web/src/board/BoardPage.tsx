@@ -25,6 +25,7 @@ import { useToasts } from '../components/Toasts';
 import { Avatar, Spinner, dueState } from '../components/ui';
 import { Building2, Ellipsis, Eye, ListFilter, Lock, Star, UserPlus, X } from '../components/icons';
 import { isTypingTarget } from '../components/Shortcuts';
+import { hasOpenLayer } from '../components/Popover';
 import { NotFoundPage } from '../pages/NotFound';
 import { BoardActionsContext, BoardContext, useBoard as useContextSafe, type BoardActions, type BoardCtx } from './context';
 import { byPos, cardsInList, fromSnapshot, reduceEvent, type BoardEvent, type BoardState, type Card, type List } from './store';
@@ -388,6 +389,7 @@ export function BoardPage() {
     const id = String(e.active.id);
     setActiveDrag(id);
     setCardPop(null);
+    setKbMove(null);
     if (id.startsWith('card:')) setDragCols({ ...baseCols });
   };
   const onDragOver = (e: DragOverEvent) => {
@@ -492,14 +494,23 @@ export function BoardPage() {
 
   // Keyboard alternative to dragging (WCAG 2.5.7): Space picks up, arrows move, Enter/Space drops, Esc cancels.
   const onCardKey = (e: React.KeyboardEvent, card: Card) => {
-    if (!state || (me?.prefs.shortcuts === false && !['Enter', ' ', 'Escape'].includes(e.key))) return;
+    if (!state) return;
+    // With shortcuts off, only single-character shortcuts are disabled; moving and navigating always work.
+    if (me?.prefs.shortcuts === false && !kbMove && e.key.length === 1 && e.key !== ' ') return;
     const can = state.access.can;
-    const listIds = lists.map((l) => l.id);
+    // Collapsed lists show no cards, so keyboard moves and focus skip them.
+    const listIds = lists.filter((l) => !collapsed.includes(l.id)).map((l) => l.id);
     if (kbMove) {
       if (kbMove.cardId !== card.id) return;
+      if (e.key === 'Tab') return; // never trap focus: leaving the card cancels the move (focusout below)
       e.preventDefault();
       e.stopPropagation();
-      const c = dragCols!;
+      const c = dragCols;
+      if (!c || !findList(c, card.id)) {
+        setKbMove(null);
+        setDragCols(null);
+        return;
+      }
       const from = findList(c, card.id)!;
       const idx = c[from].indexOf(card.id);
       let to = from;
@@ -601,6 +612,26 @@ export function BoardPage() {
   const cardKeyRef = useRef(onCardKey);
   cardKeyRef.current = onCardKey;
   const stableCardKey = useCallback((e: React.KeyboardEvent, c: Card) => cardKeyRef.current(e, c), []);
+  // A keyboard move ends if focus leaves the moving card (Tab away, click elsewhere): never leave the board frozen.
+  useEffect(() => {
+    if (!kbMove) return;
+    let t: number | undefined;
+    const onFocusOut = () => {
+      window.clearTimeout(t);
+      t = window.setTimeout(() => {
+        if ((document.activeElement as HTMLElement | null)?.dataset?.cardId !== kbMove.cardId) {
+          setKbMove(null);
+          setDragCols(null);
+          announce('Move cancelled.');
+        }
+      }, 250);
+    };
+    document.addEventListener('focusout', onFocusOut);
+    return () => {
+      window.clearTimeout(t);
+      document.removeEventListener('focusout', onFocusOut);
+    };
+  }, [kbMove, announce]);
   const onHover = useCallback((cardId: string | null) => {
     hovered.current = cardId;
   }, []);
@@ -619,8 +650,7 @@ export function BoardPage() {
   // Board-level shortcuts.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isTypingTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('.modal, .popover') || me?.prefs.shortcuts === false) return;
-      if ((e.target as HTMLElement | null)?.closest?.('[data-card-id]')) return; // the focused card handles its own keys
+      if (e.defaultPrevented || isTypingTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey || hasOpenLayer() || me?.prefs.shortcuts === false) return;
       if (e.key === 'f') {
         e.preventDefault();
         setShowFilter(true);
@@ -803,7 +833,7 @@ export function BoardPage() {
           <p id="card-help" className="visually-hidden">
             Enter opens the card. Space picks it up to move with the arrow keys. E: quick edit, L: labels, M: members, D: dates, C: archive.
           </p>
-          <div id="board-announcer" className="visually-hidden" aria-live="assertive" aria-atomic="true">
+          <div id="board-announcer" className="visually-hidden" aria-live="polite" aria-atomic="true">
             {announcement}
           </div>
         </div>

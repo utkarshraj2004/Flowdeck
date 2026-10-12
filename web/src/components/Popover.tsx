@@ -14,6 +14,8 @@ const firstFocusable = (el: HTMLElement) =>
  * outside clicks, so closing a confirmation never also closes the popover that opened it.
  */
 const layers: object[] = [];
+/** True while any popover, dialog, drawer or quick editor is open: page-level shortcuts stay quiet. */
+export const hasOpenLayer = () => layers.length > 0;
 export function useLayer() {
   const token = useRef({});
   useEffect(() => {

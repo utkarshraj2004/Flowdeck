@@ -16,7 +16,6 @@ const NOTIFICATION_KINDS: { kind: string; title: string; desc: string }[] = [
   { kind: 'card_moved', title: 'Cards move', desc: 'A card you’re on or watching moves to another list.' },
   { kind: 'card_archived', title: 'Cards are archived', desc: 'A card you’re on or watching is archived.' },
   { kind: 'card_created', title: 'New cards on watched lists and boards', desc: 'Someone adds a card where you’re watching.' },
-  { kind: 'added_to_board', title: 'You’re added to a board', desc: 'Someone adds you as a board member.' },
   { kind: 'invite_accepted', title: 'Your invitation is accepted', desc: 'Someone joins a workspace with an invitation you sent.' },
 ];
 
@@ -141,7 +140,7 @@ export function AccountPage() {
             </label>
           ))}
         </fieldset>
-        <p className="muted small">Changes to your access — being removed from a board or workspace, or your board role changing — are always delivered.</p>
+        <p className="muted small">Changes to your access — being added to or removed from a board, removed from a workspace, or your board role changing — are always delivered.</p>
         <button className="btn btn-primary" disabled={savingNotifs}>
           Save notification settings
         </button>

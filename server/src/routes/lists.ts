@@ -16,6 +16,12 @@ import { resolveBoardId } from './boards.js';
 export async function listRoutes(app: FastifyInstance, ctx: Ctx) {
   const { db } = ctx;
 
+  /** Under the board lock: the list must still be on the board that was permission-checked. */
+  async function stillOn(tx: Parameters<typeof one>[0], list: { id: string; board_id: string }) {
+    const cur = await one(tx, 'SELECT board_id FROM lists WHERE id = $1', [list.id]);
+    if (!cur || cur.board_id !== list.board_id) throw conflict('stale', 'This list moved or was deleted. Reload and try again.');
+  }
+
   async function loadList(id: string) {
     if (!v.isUuid(id)) throw notFound('List not found');
     const l = await one(db, 'SELECT * FROM lists WHERE id = $1', [id]);
@@ -187,6 +193,7 @@ export async function listRoutes(app: FastifyInstance, ctx: Ctx) {
     await requireBoard(db, u.id, list.board_id, 'edit');
     const { data, events } = await runMutation(ctx, u.id, mutationId(req), async (m) => {
       await m.lock(list.board_id);
+      await stillOn(m.tx, list);
       const rows = await many(m.tx, 'UPDATE cards SET archived_at = now(), version = version + 1 WHERE list_id = $1 AND archived_at IS NULL RETURNING id', [list.id]);
       await m.emit(list.board_id, 'list.cards_archived', { listId: list.id, summary: { name: list.name, count: rows.length }, data: { listId: list.id, cardIds: rows.map((r) => r.id) } });
       return rows.length;
@@ -204,6 +211,7 @@ export async function listRoutes(app: FastifyInstance, ctx: Ctx) {
     if (target.archived_at) throw conflict('list_archived', 'The target list is archived.');
     const { data, events } = await runMutation(ctx, u.id, mutationId(req), async (m) => {
       await m.lock(list.board_id);
+      await stillOn(m.tx, list);
       const cards = await many(m.tx, 'SELECT id FROM cards WHERE list_id = $1 AND archived_at IS NULL ORDER BY position, id', [list.id]);
       for (const c of cards) {
         const { position } = await keyFor(m.tx, { table: 'cards', column: 'list_id', id: targetId, openOnly: true }, 'bottom', c.id);
@@ -231,6 +239,7 @@ export async function listRoutes(app: FastifyInstance, ctx: Ctx) {
     }[by];
     const { data, events } = await runMutation(ctx, u.id, mutationId(req), async (m) => {
       await m.lock(list.board_id);
+      await stillOn(m.tx, list);
       const cards = await many(m.tx, `SELECT id FROM cards WHERE list_id = $1 AND archived_at IS NULL ORDER BY ${order}`, [list.id]);
       const keys = cards.length ? generateNKeysBetween(null, null, cards.length) : [];
       for (let i = 0; i < cards.length; i++) await m.tx.query('UPDATE cards SET position = $2, version = version + 1, updated_at = now() WHERE id = $1', [cards[i].id, keys[i]]);

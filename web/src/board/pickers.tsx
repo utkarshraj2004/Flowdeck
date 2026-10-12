@@ -313,35 +313,66 @@ export function DatesPicker({ card, anchor, onClose }: PickerProps) {
 
 // ---------------------------------------------------------------- move / copy
 
-type Dest = { boards: any[]; boardId: string; lists: any[]; cards: any[] };
+type Dest = { boards: any[]; boardId: string; lists: any[]; cards: any[]; loading: boolean; error: string };
 
 function useDestination(card: CardLike) {
   const { state } = useBoard();
-  const [d, setD] = useState<Dest>({ boards: [{ id: state.board.id, name: state.board.name, shortId: state.board.shortId }], boardId: state.board.id, lists: [], cards: [] });
-  const [listId, setListId] = useState(card.listId);
+  const [d, setD] = useState<Dest>({ boards: [{ id: state.board.id, name: state.board.name, shortId: state.board.shortId }], boardId: state.board.id, lists: [], cards: [], loading: false, error: '' });
+  const [listId, setListIdRaw] = useState(card.listId);
+  const [pos, setPos] = useState('bottom');
+  // A position belongs to one list: changing the list or board resets it so the screen and the request agree.
+  const setListId = (v: string | ((cur: string) => string)) => {
+    setListIdRaw(v);
+    setPos('bottom');
+  };
   useEffect(() => {
-    get('/me/home').then((r) => setD((x) => ({ ...x, boards: r.boards.filter((b: any) => !b.closedAt && (b.role === 'admin' || b.role === 'member')) })));
+    get('/me/home')
+      .then((r) => setD((x) => ({ ...x, boards: r.boards.filter((b: any) => !b.closedAt && (b.role === 'admin' || b.role === 'member')) })))
+      .catch(() => undefined); // the current board stays available
   }, []);
   useEffect(() => {
+    let stale = false;
     if (d.boardId === state.board.id) {
       const lists = Object.values(state.lists)
         .filter((l) => !l.archivedAt)
         .sort((a, b) => (a.position < b.position ? -1 : 1));
-      setD((x) => ({ ...x, lists, cards: Object.values(state.cards).filter((c) => !c.archivedAt) }));
-      setListId((cur) => (lists.some((l) => l.id === cur) ? cur : lists[0]?.id));
-    } else
-      get(`/boards/${d.boardId}`).then((s) => {
-        setD((x) => ({ ...x, lists: s.lists, cards: s.cards }));
-        setListId((cur) => (s.lists.some((l: any) => l.id === cur) ? cur : s.lists[0]?.id));
-      });
+      setD((x) => ({ ...x, lists, cards: Object.values(state.cards).filter((c) => !c.archivedAt), loading: false, error: '' }));
+      setListIdRaw((cur) => (lists.some((l) => l.id === cur) ? cur : lists[0]?.id));
+    } else {
+      // Until the other board's lists arrive, nothing can be submitted against the wrong board.
+      setD((x) => ({ ...x, lists: [], cards: [], loading: true, error: '' }));
+      get(`/boards/${d.boardId}`)
+        .then((s) => {
+          if (stale) return;
+          setD((x) => ({ ...x, lists: s.lists, cards: s.cards, loading: false }));
+          setListIdRaw(s.lists[0]?.id);
+        })
+        .catch((e) => !stale && setD((x) => ({ ...x, loading: false, error: (e as Error).message })));
+    }
+    return () => {
+      stale = true;
+    };
     // The current board's lists and cards are read once per board choice; positions refresh on reopen.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [d.boardId]);
   const inList = d.cards.filter((c) => c.listId === listId && c.id !== card.id).sort((a, b) => (a.position < b.position ? -1 : 1));
-  return { ...d, setBoardId: (boardId: string) => setD((x) => ({ ...x, boardId })), listId, setListId, inList };
+  return {
+    ...d,
+    setBoardId: (boardId: string) => {
+      setD((x) => ({ ...x, boardId }));
+      setPos('bottom');
+    },
+    listId,
+    setListId,
+    inList,
+    pos,
+    setPos,
+    ready: !d.loading && !d.error && !!listId,
+  };
 }
 
-function DestinationFields({ dest, pos, setPos }: { dest: ReturnType<typeof useDestination>; pos: string; setPos: (p: string) => void }) {
+function DestinationFields({ dest }: { dest: ReturnType<typeof useDestination> }) {
+  const { pos, setPos } = dest;
   return (
     <>
       <label className="field">
@@ -378,6 +409,13 @@ function DestinationFields({ dest, pos, setPos }: { dest: ReturnType<typeof useD
           </select>
         </label>
       </div>
+      {dest.loading && <p className="muted small">Loading lists…</p>}
+      {dest.error && (
+        <p className="field-error" role="alert">
+          Couldn’t load that board’s lists: {dest.error}
+        </p>
+      )}
+      {!dest.loading && !dest.error && !dest.lists.length && <p className="muted small">That board has no lists yet.</p>}
     </>
   );
 }
@@ -388,7 +426,6 @@ export function MoveCardPicker({ card, anchor, onClose, onMoved }: PickerProps &
   const { state, run } = useBoard();
   const { push } = useToasts();
   const dest = useDestination(card);
-  const [pos, setPos] = useState('bottom');
   return (
     <Popover anchor={anchor} title="Move card" onClose={onClose}>
       <form
@@ -396,10 +433,12 @@ export function MoveCardPicker({ card, anchor, onClose, onMoved }: PickerProps &
         onSubmit={async (e) => {
           e.preventDefault();
           const fromList = state.lists[card.listId];
-          const r: any = await run(() => post(`/cards/${card.id}/move`, { listId: dest.listId, position: placement(pos) }));
+          if (!dest.ready) return;
+          const r: any = await run(() => post(`/cards/${card.id}/move`, { listId: dest.listId, position: placement(dest.pos) }));
           if (!r) return;
-          const b = dest.boards.find((x) => x.id === dest.boardId);
-          const other = dest.boardId !== state.board.id;
+          // Where the card actually is now comes from the server's answer, not from the form.
+          const b = dest.boards.find((x) => x.id === r.card.boardId);
+          const other = r.card.boardId !== state.board.id;
           if (!other && fromList && fromList.id !== dest.listId)
             push({
               kind: 'info',
@@ -410,9 +449,11 @@ export function MoveCardPicker({ card, anchor, onClose, onMoved }: PickerProps &
           onMoved?.(other && b ? `/b/${b.shortId}/c/${r.card.number}` : undefined);
         }}
       >
-        <DestinationFields dest={dest} pos={pos} setPos={setPos} />
+        <DestinationFields dest={dest} />
         {dest.boardId !== state.board.id && <p className="muted small">Members who aren’t on the target board are removed from the card; labels are matched by name and colour.</p>}
-        <button className="btn btn-primary btn-small">Move</button>
+        <button className="btn btn-primary btn-small" disabled={!dest.ready}>
+          Move
+        </button>
       </form>
     </Popover>
   );
@@ -422,7 +463,6 @@ export function CopyCardPicker({ card, anchor, onClose, counts }: PickerProps & 
   const { state, run } = useBoard();
   const nav = useNavigate();
   const dest = useDestination(card);
-  const [pos, setPos] = useState('bottom');
   const [name, setName] = useState(card.name);
   const keepOptions: [string, string, number][] = [
     ['checklists', 'Checklists', counts.checklists],
@@ -439,10 +479,11 @@ export function CopyCardPicker({ card, anchor, onClose, counts }: PickerProps & 
           e.preventDefault();
           const f = new FormData(e.currentTarget);
           const keep = keepOptions.map(([k]) => k).filter((k) => f.get(k) === 'on');
-          const r: any = await run(() => post(`/cards/${card.id}/copy`, { listId: dest.listId, position: placement(pos), name, keep }), 'Card copied');
+          if (!dest.ready) return;
+          const r: any = await run(() => post(`/cards/${card.id}/copy`, { listId: dest.listId, position: placement(dest.pos), name, keep }), 'Card copied');
           if (!r) return;
           onClose();
-          const b = dest.boards.find((x) => x.id === dest.boardId);
+          const b = dest.boards.find((x) => x.id === r.card.boardId);
           nav(`/b/${b?.shortId ?? state.board.shortId}/c/${r.card.number}`);
         }}
       >
@@ -461,8 +502,10 @@ export function CopyCardPicker({ card, anchor, onClose, counts }: PickerProps & 
             ))}
           {keepOptions.every(([, , n]) => n === 0) && <p className="muted small">Nothing else to copy.</p>}
         </fieldset>
-        <DestinationFields dest={dest} pos={pos} setPos={setPos} />
-        <button className="btn btn-primary btn-small">Create card</button>
+        <DestinationFields dest={dest} />
+        <button className="btn btn-primary btn-small" disabled={!dest.ready}>
+          Create card
+        </button>
       </form>
     </Popover>
   );

@@ -287,19 +287,32 @@ function MoveListPopover({ list, lists, anchor, onClose, onBack }: { list: List;
   const nav = useNavigate();
   const [boards, setBoards] = useState<any[]>([{ id: state.board.id, name: state.board.name, shortId: state.board.shortId }]);
   const [boardId, setBoardId] = useState(state.board.id);
-  const [targetLists, setTargetLists] = useState<List[]>(lists);
+  const [targetLists, setTargetLists] = useState<List[] | null>(lists);
+  const [error, setError] = useState('');
   const [after, setAfter] = useState<string>(() => {
     const i = lists.findIndex((l) => l.id === list.id);
     return i > 0 ? lists[i - 1].id : '';
   });
   useEffect(() => {
-    get('/me/home').then((r) => setBoards(r.boards.filter((b: any) => !b.closedAt && (b.role === 'admin' || b.role === 'member'))));
+    get('/me/home')
+      .then((r) => setBoards(r.boards.filter((b: any) => !b.closedAt && (b.role === 'admin' || b.role === 'member'))))
+      .catch(() => undefined); // the current board stays available
   }, []);
   useEffect(() => {
+    let stale = false;
+    setError('');
     if (boardId === state.board.id) setTargetLists(lists);
-    else get(`/boards/${boardId}`).then((s) => setTargetLists(s.lists));
+    else {
+      setTargetLists(null);
+      get(`/boards/${boardId}`)
+        .then((s) => !stale && setTargetLists(s.lists))
+        .catch((e) => !stale && setError((e as Error).message));
+    }
+    return () => {
+      stale = true;
+    };
   }, [boardId, lists, state.board.id]);
-  const others = targetLists.filter((l) => l.id !== list.id);
+  const others = (targetLists ?? []).filter((l) => l.id !== list.id);
   return (
     <Popover anchor={anchor} title="Move list" onClose={onClose} onBack={onBack}>
       <form
@@ -316,7 +329,14 @@ function MoveListPopover({ list, lists, anchor, onClose, onBack }: { list: List;
       >
         <label className="field">
           <span>Board</span>
-          <select aria-label="Destination board" value={boardId} onChange={(e) => setBoardId(e.target.value)}>
+          <select
+            aria-label="Destination board"
+            value={boardId}
+            onChange={(e) => {
+              setBoardId(e.target.value);
+              setAfter(''); // positions belong to one board
+            }}
+          >
             {boards.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
@@ -337,7 +357,14 @@ function MoveListPopover({ list, lists, anchor, onClose, onBack }: { list: List;
           </select>
         </label>
         {boardId !== state.board.id && <p className="muted small">Card members who aren’t on the target board will be removed from the cards. Labels are matched by name and colour (missing ones are created).</p>}
-        <button className="btn btn-primary btn-small">Move</button>
+        {error && (
+          <p className="field-error" role="alert">
+            Couldn’t load that board’s lists: {error}
+          </p>
+        )}
+        <button className="btn btn-primary btn-small" disabled={!targetLists}>
+          Move
+        </button>
       </form>
     </Popover>
   );
@@ -482,9 +509,10 @@ export function AddList() {
           e.preventDefault();
           const name = ref.current!.value.trim();
           if (!name) return;
-          await run(() => post(`/boards/${getState().board.id}/lists`, { name }));
-          ref.current!.value = '';
-          ref.current!.focus();
+          const r = await run(() => post(`/boards/${getState().board.id}/lists`, { name }));
+          if (!r || !ref.current) return; // keep the typed name when it failed
+          ref.current.value = '';
+          ref.current.focus();
         }}
       >
         <input ref={ref} autoFocus aria-label="List name" placeholder="Enter list name…" maxLength={200} onKeyDown={(e) => e.key === 'Escape' && (e.stopPropagation(), setOpen(false))} />

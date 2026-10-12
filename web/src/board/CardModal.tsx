@@ -36,6 +36,7 @@ import {
 import { useToasts } from '../components/Toasts';
 import { Avatar, bytes, DUE_TEXT, dueState, formatDate, LabelChip, timeAgo } from '../components/ui';
 import { Markdown } from '../components/Markdown';
+import { copyText } from '../components/clipboard';
 import { useBoard } from './context';
 import { describeActivity, type BoardEvent } from './store';
 import { AttachmentPicker, ChecklistPicker, CopyCardPicker, CoverPicker, DatesPicker, LabelsPicker, MembersPicker, MoveCardPicker } from './pickers';
@@ -52,7 +53,7 @@ type Act = (fn: () => Promise<any>, ok?: string, optimistic?: (c: Detail) => Det
  * (research J07.9, J08.10, J08.11).
  */
 export function CardModal({ number, onClose }: { number: number; onClose: () => void }) {
-  const { state, onEvent, run, setWatching } = useBoard();
+  const { state, onEvent, run, setWatching, patchCard } = useBoard();
   const { push } = useToasts();
   const nav = useNavigate();
   const location = useLocation();
@@ -176,8 +177,12 @@ export function CardModal({ number, onClose }: { number: number; onClose: () => 
       await act(() => post(`/cards/${card.id}/attachments`, fd), `Attached ${f.name}`);
     }
   };
-  const toggleComplete = () =>
-    act(() => patch(`/cards/${card.id}`, { dueComplete: !card.dueComplete }), undefined, (c) => ({ ...c, dueComplete: !c.dueComplete }));
+  const toggleComplete = () => {
+    const dueComplete = !card.dueComplete;
+    // The dialog shows the board's copy of the card, so the optimistic change goes there (and to the detail).
+    patchCard(card.id, (c) => ({ ...c, dueComplete }));
+    return act(() => patch(`/cards/${card.id}`, { dueComplete }), undefined, (c) => ({ ...c, dueComplete }));
+  };
   const toggleWatch = async () => {
     const on = !watching;
     setWatching('card', card.id, on);
@@ -256,10 +261,10 @@ export function CardModal({ number, onClose }: { number: number; onClose: () => 
             {dirty() && (
               <button
                 className="btn btn-small btn-light"
-                onClick={() =>
-                  navigator.clipboard
-                    ?.writeText(Object.values(drafts.current).filter(Boolean).join('\n\n'))
-                    .then(() => push({ kind: 'success', text: 'Draft copied to the clipboard' }))
+                onClick={async () =>
+                  (await copyText(Object.values(drafts.current).filter(Boolean).join('\n\n')))
+                    ? push({ kind: 'success', text: 'Draft copied to the clipboard' })
+                    : push({ kind: 'error', text: 'Your browser blocked copying. Select the text in the editor and copy it manually.' })
                 }
               >
                 Copy draft
@@ -467,7 +472,8 @@ export function CardModal({ number, onClose }: { number: number; onClose: () => 
               role="menuitem"
               onClick={() => {
                 pop.close();
-                navigator.clipboard?.writeText(`${window.location.origin}/b/${state.board.shortId}/c/${card.number}`).then(() => push({ kind: 'success', text: 'Card link copied' }));
+                const url = `${window.location.origin}/b/${state.board.shortId}/c/${card.number}`;
+                copyText(url).then((ok) => push(ok ? { kind: 'success', text: 'Card link copied' } : { kind: 'error', text: `Your browser blocked copying. The link is ${url}`, sticky: true }));
               }}
             >
               <Link size={16} aria-hidden="true" /> Copy link
@@ -725,7 +731,7 @@ function DescriptionEditor({ card, editable, drafts, lastEditor, reload }: { car
             {notice && (
               <div className="banner banner-warn" role="alert">
                 {notice} updated the description while you were editing. Your draft is kept; saving will ask which version to keep.
-                <button className="btn btn-small btn-light" onClick={() => setPreview(false)}>
+                <button className="btn btn-small btn-light" onClick={() => setNotice(null)}>
                   OK
                 </button>
               </div>
@@ -1014,9 +1020,10 @@ function Checklist({ cl, card, editable, act, setCard, onDelete }: { cl: any; ca
                 e.preventDefault();
                 const v = ref.current!.value.trim();
                 if (!v) return;
-                ref.current!.value = '';
-                await act(() => post(`/checklists/${cl.id}/items`, { name: v }));
-                ref.current?.focus();
+                const r = await act(() => post(`/checklists/${cl.id}/items`, { name: v }));
+                if (!r || !ref.current) return; // keep the typed item when it failed
+                ref.current.value = '';
+                ref.current.focus();
               }}
             >
               <input ref={ref} autoFocus aria-label="New item" placeholder="Add an item" maxLength={1000} onKeyDown={(e) => e.key === 'Escape' && (e.stopPropagation(), setAdding(false))} />

@@ -124,3 +124,24 @@ test('toggling a label in the card dialog shows at once and costs one write plus
   expect(requests.filter((r) => r.startsWith('PUT'))).toHaveLength(1);
   expect(requests.filter((r) => r.startsWith('GET')).length).toBeLessThanOrEqual(1);
 });
+
+test('a keyboard move never leaves the board frozen: leaving the card cancels it, and z works with a card focused', async ({ page, context }) => {
+  const user = await createUser(uniq('kbstuck'));
+  const api = await loginContext(context, user.email);
+  const { board, lists } = await seedBoard(api, 'Stuck board');
+  for (const n of ['first', 'second']) await api.call('POST', `/lists/${lists[0].id}/cards`, { name: n });
+  await page.goto(`/b/${board.shortId}`);
+  await tile(page, 'first').focus();
+  await page.keyboard.press('Space');
+  await page.keyboard.press('Tab'); // focus leaves the picked-up card
+  await expect(page.locator('#board-announcer')).toHaveText('Move cancelled.');
+  // Live changes still show and other cards respond to keys.
+  await api.call('POST', `/lists/${lists[1].id}/cards`, { name: 'arrived later' });
+  await expect(tile(page, 'arrived later')).toBeVisible();
+  await tile(page, 'second').focus();
+  await page.keyboard.press('c');
+  await expect(tile(page, 'second')).toHaveCount(0);
+  await tile(page, 'first').focus(); // keyboard users usually have a card focused
+  await page.keyboard.press('z');
+  await expect(tile(page, 'second')).toBeVisible();
+});

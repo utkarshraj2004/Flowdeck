@@ -1,6 +1,7 @@
 import type { Db, Tx } from '../db.js';
 import { withTx } from '../db.js';
 import { boardAccess } from './permissions.js';
+import { MUTABLE_NOTIFICATIONS } from './constants.js';
 import type { EventMsg, Hub } from './hub.js';
 
 export interface NotificationOut {
@@ -80,8 +81,10 @@ export class Mutation {
       seen.add(uid);
       if (ctx.boardId && !(await boardAccess(this.tx, uid, ctx.boardId))) continue;
       // Respect the recipient's notification settings (access changes are never mutable).
-      const muted = await this.tx.query(`SELECT 1 FROM users WHERE id = $1 AND prefs->'mutedNotifications' ? $2`, [uid, kind]);
-      if (muted.rowCount) continue;
+      if ((MUTABLE_NOTIFICATIONS as readonly string[]).includes(kind)) {
+        const muted = await this.tx.query(`SELECT 1 FROM users WHERE id = $1 AND prefs->'mutedNotifications' ? $2`, [uid, kind]);
+        if (muted.rowCount) continue;
+      }
       const r = await this.tx.query(
         `INSERT INTO notifications (user_id, kind, actor_id, board_id, card_id, data) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, created_at`,
         [uid, kind, this.actorId, ctx.boardId, ctx.cardId ?? null, ctx.data ?? {}],

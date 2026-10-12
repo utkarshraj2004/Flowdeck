@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 
 export interface Toast {
   id: number;
@@ -25,8 +25,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     },
     [dismiss],
   );
+  const value = useMemo(() => ({ push, dismiss }), [push, dismiss]);
   return (
-    <Ctx.Provider value={{ push, dismiss }}>
+    <Ctx.Provider value={value}>
       {children}
       <div className="toasts" role="region" aria-label="Notifications">
         <div aria-live="polite" aria-atomic="false">

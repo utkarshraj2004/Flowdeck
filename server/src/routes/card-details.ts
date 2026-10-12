@@ -144,8 +144,10 @@ export async function cardDetailRoutes(app: FastifyInstance, ctx: Ctx) {
     const { data, events } = await runMutation(ctx, u.id, mutationId(req), async (m) => {
       await m.lock(card.board_id);
       const cur = await one(m.tx, 'SELECT c.*, l.name AS list_name, l.archived_at AS list_archived FROM cards c JOIN lists l ON l.id = c.list_id WHERE c.id = $1', [card.id]);
-      if (!cur || cur.archived_at || cur.list_archived) throw conflict('card_archived', 'Restore the card (and its list) before converting items.');
-      const still = await one(m.tx, 'SELECT id FROM check_items WHERE id = $1', [it.id]);
+      // The card may have moved to another board between the permission check and the lock.
+      if (!cur || cur.board_id !== card.board_id) throw conflict('stale', 'This card moved. Reload and try again.');
+      if (cur.archived_at || cur.list_archived) throw conflict('card_archived', 'Restore the card (and its list) before converting items.');
+      const still = await one(m.tx, 'SELECT name FROM check_items WHERE id = $1', [it.id]);
       if (!still) throw notFound('Item not found');
       const count = await one(m.tx, 'SELECT count(*)::int AS n FROM cards WHERE board_id = $1 AND archived_at IS NULL', [card.board_id]);
       if (count.n >= LIMITS.openCardsPerBoard) throw invalid(`This board has reached its limit of ${LIMITS.openCardsPerBoard} open cards`, { code: 'limit_exceeded' });
@@ -154,11 +156,11 @@ export async function cardDetailRoutes(app: FastifyInstance, ctx: Ctx) {
       const nc = await one(
         m.tx,
         'INSERT INTO cards (board_id, list_id, number, name, position, created_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
-        [card.board_id, cur.list_id, num.n, it.name.slice(0, 512), position, u.id],
+        [card.board_id, cur.list_id, num.n, still.name.slice(0, 512), position, u.id],
       );
       await m.watch(u.id, 'card', nc.id);
       await m.tx.query('DELETE FROM check_items WHERE id = $1', [it.id]);
-      await emitCard(m, card, 'check_item.converted', { itemName: it.name, newCardNumber: nc.number });
+      await emitCard(m, card, 'check_item.converted', { itemName: still.name, newCardNumber: nc.number });
       const evt = await emitCard(m, nc, 'card.created', { listName: cur.list_name, fromCard: cur.name }, { rebalanced });
       return evt.data.card;
     });

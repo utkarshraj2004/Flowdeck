@@ -47,7 +47,9 @@ export function Modal({
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
       if (e.key === 'Escape') {
-        // Let inner editors handle Esc first (they stop propagation).
+        // Let inner editors handle Esc first (they stop propagation). A keyboard drag in progress
+        // (dnd-kit marks its handle aria-pressed) uses Esc to cancel the drag, not to close the dialog.
+        if ((e.target as HTMLElement | null)?.closest?.('[aria-pressed="true"]')) return;
         e.preventDefault();
         closeRef.current();
       } else if (e.key === 'Tab') {

@@ -9,7 +9,7 @@ import { loadBoardPage } from '../board/lazy';
 import { useToasts } from './Toasts';
 import { ErrorBoundary } from './ErrorBoundary';
 import { Modal } from './Modal';
-import { MenuItems, Popover, useLayer, usePopover } from './Popover';
+import { hasOpenLayer, MenuItems, Popover, useLayer, usePopover } from './Popover';
 import { ShortcutHelp, isTypingTarget } from './Shortcuts';
 import { CreateBoardDialog } from './CreateBoard';
 import { Bell, Building2, CheckCheck, CircleHelp, Keyboard, LogOut, Mail, MailOpen, Plus, Search, Settings, ShieldCheck, SquareKanban, Star, X } from './icons';
@@ -38,7 +38,7 @@ export function Shell() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isTypingTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('.modal')) return;
+      if (isTypingTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey || hasOpenLayer()) return;
       if (me?.prefs.shortcuts === false) return;
       if (e.key === '/') {
         e.preventDefault();
