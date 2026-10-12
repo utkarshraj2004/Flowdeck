@@ -82,11 +82,19 @@ export function dueState(dueAt: string | null, complete: boolean, now = Date.now
 
 export const DUE_TEXT: Record<string, string> = { complete: 'Complete', 'overdue-long': 'Overdue', overdue: 'Overdue', soon: 'Due soon', later: 'Due' };
 
+// Creating an Intl formatter is expensive; large boards format thousands of dates, so reuse them.
+const formatters = new Map<string, Intl.DateTimeFormat>();
 export function formatDate(iso: string | null, withTime = true) {
   if (!iso) return '';
   const d = new Date(iso);
   const sameYear = d.getFullYear() === new Date().getFullYear();
-  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }), ...(withTime ? { hour: 'numeric', minute: '2-digit' } : {}) });
+  const key = `${sameYear}:${withTime}`;
+  let f = formatters.get(key);
+  if (!f) {
+    f = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }), ...(withTime ? { hour: 'numeric', minute: '2-digit' } : {}) });
+    formatters.set(key, f);
+  }
+  return f.format(d);
 }
 
 export function timeAgo(iso: string) {

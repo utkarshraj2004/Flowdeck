@@ -1,6 +1,6 @@
 # Implementation checklist
 
-Status of Flowdeck 0.1.0 against the first-version scope and the research coverage table ([research/00-coverage.md](../research/00-coverage.md); row numbers in brackets). Updated 2026-10-12.
+Status of Flowdeck (0.1.0 plus the session 3 upgrade, [UPGRADE-GAPS.md](UPGRADE-GAPS.md)) against the first-version scope and the research coverage table ([research/00-coverage.md](../research/00-coverage.md); row numbers in brackets). Updated 2026-10-12.
 
 **Legend:**
 - ✅ **Complete**: implemented and covered by automated tests.
@@ -42,23 +42,25 @@ Status of Flowdeck 0.1.0 against the first-version scope and the research covera
 | Board settings: comments, invitations, self-join, covers [11] | ✅ | |
 | Copy board (with or without cards) | ✅ | |
 | Close / reopen / delete with typed name [14] | ✅ | |
-| Board templates [13] | ⬜ | Later |
+| Board templates [13] | ✅ | Admins mark a board as a template (board menu → Settings); “Create board” offers it as a starting point (lists, labels, cards copied) |
 | Lists: create, rename, reorder, move to board, copy, move all, archive all, archive/restore/delete [15–17] | ✅ | |
-| List sort, colours, WIP limits, collapse | ⬜ | Collapse was marked MVP in the research; not built |
+| List sort and collapse | ✅ | One-time sort by name, due date, newest or oldest (live event). Collapse is remembered per browser |
+| List colours, WIP limits | ⬜ | |
 | Cards: create, rename (512 chars, inline error), reorder, move across lists/boards, copy with keep options, archive/restore/delete [18–21] | ✅ | |
 | Complete state, start/due dates, due badges [22, 26] | ✅ | |
 | Due reminders, recurring dates [27, 28] | ⬜ | Need a scheduler and email |
 | Markdown description with preview [23] | ✅ | Plain textarea + preview (no WYSIWYG) |
-| Labels: create/edit/delete, apply, colour-blind patterns [24] | 🟡 | 10 colours + colourless (research suggested 30) |
+| Labels: create/edit/delete, apply, colour-blind patterns [24] | ✅ | 30 colours (subtle / normal / bold × 10) + colourless; stable order (migration 0002); search in the picker; names on the card front with `;` |
 | Card members [25] | ✅ | |
-| Checklists: multiple, add/rename/check/delete items, progress, hide checked [29] | 🟡 | Item reordering exists in the API but not in the UI; item assignee/due pending |
+| Checklists: multiple, add/rename/check/delete items, progress, hide checked, reorder, convert an item to a card [29] | ✅ | Reorder by drag, keyboard (Space + arrows) or the item menu. Item assignee/due pending |
 | Comments with Markdown, @mentions (board members only), edit own, admin deletes non-admin [30] | ✅ | |
 | Emoji reactions [31] | ⬜ | Later |
 | Attachments: upload (picker, drop, paste), links, size limit, permission-checked downloads [32] | ✅ | No thumbnails (originals are shown scaled); no virus scanning |
 | Covers: colour or image, auto-cover for the first image [33] | ✅ | |
 | Activity history for board and card [34] | ✅ | Also logs description and label changes |
-| Custom fields, mirror cards, card templates [35, 36, 63] | ⬜ / ➖ | |
-| Undo | 🟡 | Undo for archiving a card or list (toast); no general undo |
+| Card templates [63] | ✅ | “Make template” in the card actions; “Create from template” in each list (checklists, labels, members, attachments copied) |
+| Custom fields, mirror cards [35, 36] | ⬜ / ➖ | |
+| Undo | 🟡 | Undo for archiving a card or list (toast and `z`) and for moving a card between lists (toast); no general undo |
 
 ## Ordering and drag and drop
 
@@ -89,13 +91,13 @@ Status of Flowdeck 0.1.0 against the first-version scope and the research covera
 
 | Feature | Status | Notes |
 |---|---|---|
-| In-app notifications with the research trigger table; never the actor; live bell; grouped per card; mark read [39] | ✅ | |
+| In-app notifications with the research trigger table; never the actor; live bell; grouped per card; mark read/unread per item [39] | ✅ | Drawer with “Only unread”. Per-user settings turn off kinds of notifications; access changes are always delivered |
 | Watching boards, lists and cards; auto-watch on create/assign/comment | ✅ | |
 | Email notifications and digests [40] | ⬜ | Needs SMTP |
 | Board filter: keyword, members (incl. none / me), labels (incl. none), due, status, any/all, URL state, `f`/`x`/`q` [38] | ✅ | |
 | Global search with operators [37] | ✅ | ILIKE matching (no stemming or ranking) |
 | Saved searches | ⬜ | |
-| Keyboard shortcuts with a help dialog [41] | 🟡 | Navigation, `n`, `c`, `,` `.`, `f`, `x`, `q`, `/`, `b`, `?`, Esc, Ctrl+Enter. Not yet: `e`, `d`, `l`, `m`, `t`, `-`, Space self-assign (Space picks a card up instead) |
+| Keyboard shortcuts with a help dialog [41] | ✅ | Navigation, `n`, `c`, `z`, `,` `.` `<` `>`, `e` quick edit, `l` `m` `d`, `t`, `-`, `s`, `;`, `f`, `x`, `q`, `/`, `b`, `?`, Esc, Ctrl+Enter; on the focused or hovered card. Deliberate difference: Space picks a card up (keyboard move) instead of self-assigning |
 
 ## Interface quality
 
@@ -104,6 +106,8 @@ Status of Flowdeck 0.1.0 against the first-version scope and the research covera
 | Responsive layout: phone shows one list at ~85% width, full-screen card, 44 px targets [45] | ✅ | Browser test |
 | Accessibility: focus trap and return, labelled controls, live regions, axe with no serious/critical issues on 7 screens [47] | ✅ | WCAG 2.2 AA is the target; a full manual audit has not been done |
 | Loading, empty, error and offline states; identical 404 for missing vs no access [48] | ✅ | |
+| Popovers anchored to their control (labels, members, dates, move/copy, cover, menus); quick edit on the card front; error boundary with recovery | ✅ | `tests/e2e/upgrade.spec.ts`; axe covers the popovers, quick edit and notifications |
+| Home: recently viewed boards, templates; top bar Create menu and live search | ✅ | Recently viewed is stored per browser |
 | Browsers other than Chromium | ⬜ | Not tested automatically |
 
 ## Operations
@@ -121,6 +125,7 @@ Status of Flowdeck 0.1.0 against the first-version scope and the research covera
 | Import from Trello [57] | ➖ | Only on the owner's explicit request |
 | Object limits [59] | ✅ | Built-in defaults; not yet configurable |
 | CI: typecheck, API tests, build, browser tests, compose smoke | ✅ | The workflow first runs on the implementation PR |
-| Load test (5,000 cards, 30 clients) | ⬜ | |
+| Load test (5,000 cards, 30 clients) | ⬜ | Single-client benchmark with 1,200 cards: `scripts/perf/bench.mjs`, results in [perf/RESULTS.md](perf/RESULTS.md) |
+| Response compression, code splitting | ✅ | Board snapshot 537 KB → 45 KB; first-render JS 178 KB → 101 KB gzip |
 | Multi-node / horizontal scaling | ⬜ | Single process |
 | Idempotency keys for retried POSTs | ⬜ | The client does not auto-retry writes |

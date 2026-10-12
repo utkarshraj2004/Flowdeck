@@ -38,15 +38,15 @@ What works today (details and gaps in the [implementation checklist](docs/IMPLEM
 |---|---|
 | Accounts | First administrator via a one-time setup link, email/username + password login (argon2id), logout, password change, admin-issued password-reset links, disabling users |
 | Workspaces | Create/rename/delete, admin and member roles, reusable invite links and single-use email-bound invites (you share the link yourself; no email is sent), remove a member (keeping their boards as a guest, or not), last-admin protection |
-| Boards | Create (with optional To do/Doing/Done), private or workspace visibility, backgrounds, star, rename, description, settings (who comments, who adds people, self-join, image covers), copy, close/reopen, delete (typed confirmation), JSON export |
+| Boards | Create (with optional To do/Doing/Done, or from a board template), private or workspace visibility, backgrounds, star, rename, description, settings (who comments, who adds people, self-join, image covers), copy, close/reopen, delete (typed confirmation), JSON export |
 | Board roles | Admin, member, observer, guest (board member from outside the workspace), workspace viewer with "Join board"; workspace admins administer every board in their workspace; all enforced on the server |
-| Lists | Create, rename, drag to reorder, move to another board, copy, move all cards, archive all cards, archive/restore, delete (after archiving), watch |
-| Cards | Create, rename, Markdown description, labels, members, start/due dates with due-state badges, complete toggle, checklists, comments with @mentions, file and link attachments, colour or image covers, move (also to other boards), copy with chosen parts, archive/restore/delete, watch |
+| Lists | Create, rename, drag to reorder, collapse, sort by name/due/date, add a card at the top or bottom, move to another board, copy, move all cards, archive all cards, archive/restore (undo with `z`), delete (after archiving), watch |
+| Cards | Create, rename (also in place with quick edit), Markdown description, labels in 30 colours, members, start/due dates with due-state badges, complete toggle, checklists (reorder, convert an item to a card), comments with @mentions, file and link attachments, colour or image covers, move (also to other boards), copy with chosen parts, card templates, archive/restore/delete, watch |
 | Ordering | Drag and drop with mouse and touch (long-press), keyboard moves (Space + arrows), Move dialogs; order is stored on the server and survives reloads and restarts |
 | Collaboration | Live updates over WebSocket, reconnect catch-up without reloading, polling fallback, "<name> is editing" presence, explicit conflict prompts for title and description, unsaved-change protection |
-| Activity and notifications | Board and card activity history, in-app notification bell (mentions, assignments, due changes, comments, attachments, completion, new cards in watched lists), grouped per card, mark as read |
+| Activity and notifications | Board and card activity history, in-app notification bell (mentions, assignments, due changes, comments, attachments, completion, new cards in watched lists), grouped per card, mark as read or unread, per-kind notification settings |
 | Find | Board filter (keyword, members, labels, due, status, any/all) saved in the URL; global search with operators (`@user`, `#label`, `board:`, `list:`, `due:`, `has:`, `is:`, `-term`, `"phrase"`) |
-| Interface | Responsive (phone layout shows one list at a time; card details go full-screen), keyboard shortcuts (`?` lists them), accessible dialogs, colour-blind label patterns |
+| Interface | Popovers anchored to their buttons, quick edit on cards, two-column card dialog, Create menu and live search in the top bar, recently viewed boards; responsive (phone layout shows one list at a time; card details go full-screen); keyboard shortcuts (`?` lists them); accessible dialogs; colour-blind label patterns |
 | Operations | Docker Compose with persistent volumes, automatic forward-only migrations with downgrade protection, health endpoints, backup and restore scripts, administration page |
 
 ## Screenshots
@@ -55,11 +55,15 @@ What works today (details and gaps in the [implementation checklist](docs/IMPLEM
 |---|---|
 | ![Card dialog with description, checklist and attachments](docs/screenshots/card.png) | ![Workspace members page with an invite link](docs/screenshots/workspace-members.png) |
 
+| Labels: 30 colours | Quick edit on the card front |
+|---|---|
+| ![Create label popover with the 30-colour palette](docs/screenshots/labels-popover.png) | ![Quick editor with rename and card actions](docs/screenshots/quick-edit.png) |
+
 | Home | Phone: board | Phone: card |
 |---|---|---|
 | ![Home page with boards](docs/screenshots/home.png) | ![Board on a phone](docs/screenshots/mobile-board.png) | ![Card details on a phone](docs/screenshots/mobile-card.png) |
 
-The screenshots show synthetic demo data in the real application.
+The screenshots show synthetic demo data in the real application. Screenshots of the previous version are in `docs/screenshots/before/` for comparison.
 
 ## How it works (architecture in brief)
 
@@ -217,14 +221,15 @@ Step-by-step instructions, a cron example and a restore drill are in [docs/OPERA
 - **Plain HTTP on a LAN** works, but session cookies are then not marked `Secure`. Use HTTPS (Caddy profile) or a VPN for anything beyond a trusted network.
 - **Touch drag** is tested with emulated touch, not on physical phones. On phones, long-press auto-scroll across lists still needs real-device confirmation. The **Move** button is always available as a tap-only alternative.
 - **Concurrent editing** is field-based (explicit conflict prompts), not character-by-character co-editing.
-- **Not yet:** public boards, board/card templates, custom fields, calendar/table views, automation, email digests, two-factor login, SSO, avatars (initials only), retrying idempotency keys, image thumbnails, list collapsing, a session list in account settings.
+- **Not yet:** public boards, custom fields, calendar/table views, automation, outgoing webhooks, email digests, two-factor login, SSO, avatars (initials only), retrying idempotency keys, image thumbnails, a session list in account settings. Acceptance criteria for the larger ones are in [docs/UPGRADE-GAPS.md](docs/UPGRADE-GAPS.md).
+- **Large boards:** a 1,200-card board loads in about 0.3 s on a desktop machine, but opening a card there is slower than on small boards ([docs/perf/RESULTS.md](docs/perf/RESULTS.md)).
 - **Not tested yet:** Firefox and Safari; long-running real-team usage; large boards beyond the automated tests.
 
 ## Roadmap
 
 1. **Hardening:** scheduled backups from the admin page, storage quota display, more browsers in CI, load test (5,000-card board, 30 clients), optional antivirus scanning of uploads.
 2. **Communication:** SMTP for invitations, password resets, due-date reminders and email digests.
-3. **Productivity:** board and card templates, table and calendar views, custom fields, emoji reactions, undo, list collapsing.
+3. **Productivity:** table and calendar views, custom fields, automation rules, emoji reactions, general undo.
 4. **Identity:** two-factor login (TOTP), single sign-on (OIDC).
 5. **Migration (only on request):** import a Trello JSON export.
 

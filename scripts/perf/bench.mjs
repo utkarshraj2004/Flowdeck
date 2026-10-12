@@ -226,10 +226,12 @@ async function measure(a, b, board, lists) {
   for (let i = 0; i < RUNS; i++) {
     await page.goto(`${BASE}/`);
     await page.waitForSelector('[aria-label="Account menu"]');
+    const stopLoadProfile = i === 1 ? await profile(page, 'board-load') : async () => {};
     const t0 = Date.now();
     await page.goto(`${BASE}/b/${board.shortId}`);
     await page.waitForFunction((n) => document.querySelectorAll('[data-card-id]').length >= n, total - 5, { timeout: 60000 });
     loads.push(Date.now() - t0);
+    await stopLoadProfile();
   }
   out.boardLoadMs = median(loads);
   out.domNodes = await page.evaluate(() => document.getElementsByTagName('*').length);

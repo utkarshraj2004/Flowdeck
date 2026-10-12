@@ -90,6 +90,60 @@
 - **Verified:** a fresh headless `claude -p` session in this repo listed 395 `ecc:` skills and the ECC agents. A session that was already running when ECC was installed only sees it after a restart.
 - **After a cloud-session reset:** the new session reads `.claude/settings.json` and should offer or install `ecc@ecc` from the declared marketplace. Check with `claude plugin list` (expect `ecc@ecc … Status: √ enabled`). If ECC is missing, run the two commands above (or `/plugin marketplace add https://github.com/affaan-m/ECC` and `/plugin install ecc@ecc` inside Claude Code), then start a new session. Run `bash scripts/dev-setup.sh` to restore the rule packs.
 
+## Session 3: interface and workflow upgrade (branch `claude/flowdeck-ui-upgrade`)
+
+**Branch and PR:**
+- Branch `claude/flowdeck-ui-upgrade` was created from `854f7ed` (the head of the implementation PR).
+- Its PR targets `claude/hopeful-galileo-us9nkk`, so the implementation PR stays as it is and the upgrade can be reviewed and previewed separately.
+
+**Where to look:**
+- Audit and status: [UPGRADE-GAPS.md](UPGRADE-GAPS.md).
+- Measurements: [perf/RESULTS.md](perf/RESULTS.md).
+- Before screenshots: `docs/screenshots/before/`.
+
+**What changed:**
+- Shared UI building blocks:
+  - `web/src/components/Popover.tsx`: anchored popover, `MenuItems`, and a layer stack, so Escape and outside clicks reach only the innermost layer. `hasOpenLayer()` mutes page shortcuts.
+  - `web/src/board/pickers.tsx`: labels, members, dates, move/copy, cover, attachment and checklist popovers, used by both the card dialog and the quick editor.
+- Board files:
+  - `CardTile.tsx`: card front and quick editor.
+  - `ListColumn.tsx`: list, menu, sort, template picker.
+  - `CardModal.tsx`: two-column dialog, checklist reorder and convert.
+  - `BoardPage.tsx`: split contexts (`BoardActionsContext` is stable; `BoardContext` changes on every event), memoised columns, shortcuts.
+- Server:
+  - Migration `0002_label_order_templates.sql`.
+  - `POST /lists/:id/sort`, `POST /check-items/:id/convert`.
+  - `isTemplate` on cards and boards, `watchedCardIds` in the snapshot.
+  - Muted notification kinds (`prefs.mutedNotifications`).
+  - `@fastify/compress`.
+- Shell, home and account were built by a specialist agent in its own worktree, then merged (`b709314`).
+
+**Verification:**
+- `npm run check`: typecheck, 77 unit/API tests, build, 21 browser tests including axe on the new popovers.
+- The compose drill (`scripts/compose-smoke.mjs`) passed.
+- The new build was run against a database and upload directory written by `854f7ed`: migration 0002 applied, and data, files and URLs were identical.
+
+**Reviews:**
+- Two read-only review agents ran: server security/correctness and client React/accessibility.
+- Their traced findings were fixed in `2aee7b4`.
+- Left open on purpose:
+  - sorting a 5,000-card list holds the board lock for its duration;
+  - the size of the sort event.
+
+**ECC:**
+- Plugin `ecc@ecc` 2.2.3 at project scope, already declared in `.claude/settings.json`.
+- After the session reset it was missing from the local plugin cache and was reinstalled with the documented marketplace install. Project settings and hooks were left unchanged.
+- How its capabilities were used in this session:
+  - The ECC TypeScript rules (`~/.claude/rules/ecc`) guided the code style.
+  - The "specialist agent" pattern was applied by giving three agents strict file or read-only ownership (shell UI, server review, client review).
+  - No ECC slash commands or hooks were run.
+
+**Open items:**
+- Opening a card on a 1,200-card board is about 120 ms slower than before (native layout of the bigger dialog).
+- Unread marker on watched card fronts (gap 22).
+- Views, automation, webhooks and email (gaps 23–27): acceptance criteria only.
+- Real-phone checks: everything mobile was verified with emulation only.
+
 ## Decisions made (and why)
 
 | Decision | Reason |
@@ -124,18 +178,17 @@
 1. Get CI green on the PR, and fix anything that only fails on GitHub runners.
 2. The owner runs [research/PHONE-CHECKLIST.md](../research/PHONE-CHECKLIST.md)-style checks on a real phone against a Flowdeck instance (long-press, drag between lists, auto-scroll, cancel).
 3. Small gaps:
-   - checklist item drag in the UI;
-   - remaining shortcuts (`e`, `d`, `l`, `m`, `t`);
-   - list collapse;
-   - more label colours;
+   - card-open time on very large boards (see perf/RESULTS.md);
+   - unread markers on watched cards;
    - session list in account settings;
-   - configurable limits.
+   - configurable limits;
+   - lock-time of sorting very large lists.
 4. Operations:
    - scheduled backups and their status in the admin page;
    - load test (O4: 5,000 cards, 30 clients);
    - Firefox/WebKit in CI;
    - exercise the HTTPS profile.
-5. Roadmap items in the README (SMTP, templates, views, 2FA/SSO). Trello import only if the owner asks.
+5. Roadmap items in the README (SMTP, table/calendar views, automation; acceptance criteria in UPGRADE-GAPS.md, 2FA/SSO). Trello import only if the owner asks.
 
 ## Open questions for the owner
 
