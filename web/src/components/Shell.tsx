@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth';
 import { get, post } from '../api';
 import { realtime, type ConnStatus } from '../realtime';
-import { Avatar, Logo, timeAgo } from './ui';
+import { Avatar, Logo, Spinner, timeAgo } from './ui';
+import { loadBoardPage } from '../board/lazy';
 import { useToasts } from './Toasts';
 import { Modal } from './Modal';
 import { ShortcutHelp, isTypingTarget } from './Shortcuts';
@@ -17,6 +18,11 @@ export function Shell() {
   const [help, setHelp] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const status = useConnStatus();
+  // Fetch the board screen in the background so opening a board does not wait for its code.
+  useEffect(() => {
+    const t = window.setTimeout(() => void loadBoardPage(), 500);
+    return () => window.clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -102,7 +108,9 @@ export function Shell() {
       </header>
       {status === 'offline' && <OfflineBanner />}
       <main id="main" tabIndex={-1}>
-        <Outlet />
+        <Suspense fallback={<Spinner label="Loading" />}>
+          <Outlet />
+        </Suspense>
       </main>
       {switcher && <BoardSwitcher onClose={() => setSwitcher(false)} />}
       {help && <ShortcutHelp onClose={() => setHelp(false)} />}

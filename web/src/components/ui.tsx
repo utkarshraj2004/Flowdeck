@@ -1,5 +1,4 @@
-import MarkdownIt from 'markdown-it';
-import { useMemo, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 export function Avatar({ user, size = 28, title }: { user: { fullName: string; initials: string; id?: string } | null | undefined; size?: number; title?: string }) {
   if (!user) return null;
@@ -28,20 +27,6 @@ export function Logo() {
       <span>Flowdeck</span>
     </span>
   );
-}
-
-// Raw HTML is disabled; markdown-it's link validator rejects javascript:/vbscript:/data: URLs.
-const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
-const defaultLink = md.renderer.rules.link_open ?? ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options));
-md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
-  tokens[idx].attrSet('target', '_blank');
-  tokens[idx].attrSet('rel', 'noopener noreferrer nofollow');
-  return defaultLink(tokens, idx, options, env, self);
-};
-
-export function Markdown({ source, className = '' }: { source: string; className?: string }) {
-  const html = useMemo(() => md.render(source), [source]);
-  return <div className={`markdown ${className}`} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 export function Spinner({ label = 'Loading' }: { label?: string }) {

@@ -5,7 +5,8 @@ import { useAuth } from '../auth';
 import { realtime } from '../realtime';
 import { ConfirmDialog, Modal } from '../components/Modal';
 import { useToasts } from '../components/Toasts';
-import { Avatar, bytes, DUE_TEXT, dueState, formatDate, LABEL_COLORS, LabelChip, Markdown, timeAgo } from '../components/ui';
+import { Avatar, bytes, DUE_TEXT, dueState, formatDate, LABEL_COLORS, LabelChip, timeAgo } from '../components/ui';
+import { Markdown } from '../components/Markdown';
 import { useBoard } from './context';
 import { describeActivity, type BoardEvent } from './store';
 
@@ -36,9 +37,13 @@ export function CardModal({ number, onClose }: { number: number; onClose: () => 
   const can = state.access.can;
   const memberName = (id: string | null) => state.members.find((m) => m.id === id)?.fullName ?? 'Someone';
 
+  // Responses can arrive out of order; only the newest request may update the dialog.
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
+    const mine = ++loadSeq.current;
     try {
       const r = await get(`/boards/${state.board.id}/cards/${number}`);
+      if (mine !== loadSeq.current) return;
       setCard(r.card);
       document.title = `${r.card.name} · ${state.board.name} · Flowdeck`;
     } catch (e) {
@@ -50,6 +55,16 @@ export function CardModal({ number, onClose }: { number: number; onClose: () => 
   useEffect(() => {
     load();
   }, [load]);
+  // Several events for this card in one burst (own action echo + websocket) cause one refresh, not one each.
+  const loadTimer = useRef<number | undefined>(undefined);
+  const loadSoon = useCallback(() => {
+    if (loadTimer.current !== undefined) return;
+    loadTimer.current = window.setTimeout(() => {
+      loadTimer.current = undefined;
+      load();
+    }, 0);
+  }, [load]);
+  useEffect(() => () => window.clearTimeout(loadTimer.current), []);
 
   const cardId = card?.id;
   useEffect(() => {
@@ -60,10 +75,10 @@ export function CardModal({ number, onClose }: { number: number; onClose: () => 
       if (e.event === 'card.deleted') return setGone({ by: memberName(e.actor) });
       if (e.event === 'card.moved_out') return setGone({ by: memberName(e.actor), moved: true });
       if (e.event === 'card.updated') for (const f of e.data.changed ?? []) lastEditor.current[f] = memberName(e.actor);
-      load();
+      loadSoon();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cardId, onEvent, load]);
+  }, [cardId, onEvent, loadSoon]);
 
   const dirty = () => Object.values(drafts.current).some((d) => d.trim() !== '');
   useEffect(() => {
@@ -97,9 +112,14 @@ export function CardModal({ number, onClose }: { number: number; onClose: () => 
   const members = state.members.filter((m) => card.memberIds.includes(m.id));
   const ds = dueState(card.dueAt, card.dueComplete);
   const coverAttachment = card.cover?.attachmentId ? card.attachments.find((a: any) => a.id === card.cover.attachmentId) : null;
-  const act = async (fn: () => Promise<any>, ok?: string) => {
+  /**
+   * Run a card action. The resulting event refreshes the dialog; `optimistic` shows the change at once
+   * and is rolled back by a reload if the request fails.
+   */
+  const act = async (fn: () => Promise<any>, ok?: string, optimistic?: (c: Detail) => Detail) => {
+    if (optimistic) setCard((c: Detail) => (c ? optimistic(c) : c));
     const r = await run(fn, ok);
-    load();
+    if (r === undefined) load();
     return r;
   };
   const upload = async (files: FileList | File[]) => {
@@ -384,7 +404,7 @@ export function CardModal({ number, onClose }: { number: number; onClose: () => 
                 <button className="btn btn-light side-btn" aria-expanded={panel === 'move'} onClick={() => setPanel(panel === 'move' ? null : 'move')}>
                   Move
                 </button>
-                {panel === 'move' && <MoveCopyPanel card={card} mode="move" onDone={(dest) => (dest ? nav(dest) : load(), setPanel(null))} />}
+                {panel === 'move' && <MoveCopyPanel card={card} mode="move" onDone={(dest) => (dest && nav(dest), setPanel(null))} />}
               </>
             )}
             {can.view && !gone && (
@@ -392,7 +412,7 @@ export function CardModal({ number, onClose }: { number: number; onClose: () => 
                 <button className="btn btn-light side-btn" aria-expanded={panel === 'copy'} onClick={() => setPanel(panel === 'copy' ? null : 'copy')}>
                   Copy
                 </button>
-                {panel === 'copy' && <MoveCopyPanel card={card} mode="copy" onDone={(dest) => (dest ? nav(dest) : load(), setPanel(null))} />}
+                {panel === 'copy' && <MoveCopyPanel card={card} mode="copy" onDone={(dest) => (dest && nav(dest), setPanel(null))} />}
               </>
             )}
             {!gone && (
@@ -502,7 +522,6 @@ function TitleEditor({ card, editable, drafts, lastEditor, reload }: { card: Det
       set(null);
       setConflict(null);
       setError('');
-      reload();
     } catch (e) {
       if (e instanceof ApiError && e.code === 'version_conflict') setConflict({ theirs: e.details.current.name, by: e.details.updatedBy ?? lastEditor.current.name ?? 'Someone' });
       else setError((e as Error).message);
@@ -612,7 +631,6 @@ function DescriptionEditor({ card, editable, drafts, lastEditor, reload }: { car
       const r = await patch(`/cards/${card.id}`, { description: text, base: { description: against } });
       ingest(r.event);
       stop();
-      reload();
     } catch (e) {
       if (e instanceof ApiError && e.code === 'version_conflict')
         setConflict({ base: against, theirs: e.details.current.description, mine: text, by: e.details.updatedBy ?? 'Someone' });
@@ -768,7 +786,7 @@ function DescriptionEditor({ card, editable, drafts, lastEditor, reload }: { car
   );
 }
 
-function Checklist({ cl, editable, act, onDelete }: { cl: any; editable: boolean; act: (fn: () => Promise<any>, ok?: string) => Promise<any>; onDelete: () => void }) {
+function Checklist({ cl, editable, act, onDelete }: { cl: any; editable: boolean; act: Act; onDelete: () => void }) {
   const [hideChecked, setHideChecked] = useState(false);
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -826,7 +844,13 @@ function Checklist({ cl, editable, act, onDelete }: { cl: any; editable: boolean
           .filter((i: any) => !hideChecked || !i.checked)
           .map((i: any) => (
             <li key={i.id} className="check-item">
-              <input type="checkbox" checked={i.checked} disabled={!editable} aria-label={i.name} onChange={(e) => act(() => patch(`/check-items/${i.id}`, { checked: e.target.checked }))} />
+              <input type="checkbox" checked={i.checked} disabled={!editable} aria-label={i.name} onChange={(e) => {
+                  const checked = e.target.checked;
+                  act(() => patch(`/check-items/${i.id}`, { checked }), undefined, (c) => ({
+                    ...c,
+                    checklists: c.checklists.map((x: any) => (x.id === cl.id ? { ...x, items: x.items.map((it: any) => (it.id === i.id ? { ...it, checked } : it)) } : x)),
+                  }));
+                }} />
               {editItem === i.id ? (
                 <input
                   className="grow"
@@ -887,7 +911,9 @@ function Checklist({ cl, editable, act, onDelete }: { cl: any; editable: boolean
   );
 }
 
-function MembersPanel({ card, act }: { card: Detail; act: (fn: () => Promise<any>) => Promise<any> }) {
+type Act = (fn: () => Promise<any>, ok?: string, optimistic?: (c: Detail) => Detail) => Promise<any>;
+
+function MembersPanel({ card, act }: { card: Detail; act: Act }) {
   const { state } = useBoard();
   return (
     <div className="side-panel stack" role="group" aria-label="Card members">
@@ -895,7 +921,17 @@ function MembersPanel({ card, act }: { card: Detail; act: (fn: () => Promise<any
         const on = card.memberIds.includes(m.id);
         return (
           <label key={m.id} className="row">
-            <input type="checkbox" checked={on} onChange={() => act(() => (on ? del : put)(`/cards/${card.id}/members/${m.id}`))} />
+            <input
+              type="checkbox"
+              checked={on}
+              onChange={() =>
+                act(
+                  () => (on ? del : put)(`/cards/${card.id}/members/${m.id}`),
+                  undefined,
+                  (c) => ({ ...c, memberIds: on ? c.memberIds.filter((x: string) => x !== m.id) : [...c.memberIds, m.id] }),
+                )
+              }
+            />
             <Avatar user={m} size={22} /> {m.fullName}
           </label>
         );
@@ -904,7 +940,7 @@ function MembersPanel({ card, act }: { card: Detail; act: (fn: () => Promise<any
   );
 }
 
-function LabelsPanel({ card, act }: { card: Detail; act: (fn: () => Promise<any>) => Promise<any> }) {
+function LabelsPanel({ card, act }: { card: Detail; act: Act }) {
   const { state, run } = useBoard();
   const [editing, setEditing] = useState<string | 'new' | null>(null);
   const [color, setColor] = useState<string | null>('green');
@@ -953,7 +989,17 @@ function LabelsPanel({ card, act }: { card: Detail; act: (fn: () => Promise<any>
             return (
               <div key={l.id} className="row">
                 <label className="row grow">
-                  <input type="checkbox" checked={on} onChange={() => act(() => (on ? del : put)(`/cards/${card.id}/labels/${l.id}`))} />
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={() =>
+                      act(
+                        () => (on ? del : put)(`/cards/${card.id}/labels/${l.id}`),
+                        undefined,
+                        (c) => ({ ...c, labelIds: on ? c.labelIds.filter((x: string) => x !== l.id) : [...c.labelIds, l.id] }),
+                      )
+                    }
+                  />
                   <LabelChip label={l} /> {!l.name && <span className="muted small">{l.color}</span>}
                 </label>
                 <button
@@ -1160,7 +1206,6 @@ function CommentComposer({ cardId, drafts, reload }: { cardId: string; drafts: R
       ingest(r.event);
       update('');
       setError('');
-      reload();
     } catch (e) {
       setError((e as Error).message);
     }
@@ -1247,10 +1292,7 @@ function Feed({ card, showDetails, reload, setConfirm }: { card: Detail; showDet
                     e.preventDefault();
                     const body = String(new FormData(e.currentTarget).get('body') ?? '');
                     const r = await run(() => patch(`/comments/${it.c.id}`, { body }));
-                    if (r) {
-                      setEditing(null);
-                      reload();
-                    }
+                    if (r) setEditing(null);
                   }}
                 >
                   <textarea name="body" defaultValue={it.c.body} rows={3} autoFocus aria-label="Edit comment" onKeyDown={(e) => e.key === 'Escape' && (e.stopPropagation(), setEditing(null))} />
@@ -1280,7 +1322,7 @@ function Feed({ card, showDetails, reload, setConfirm }: { card: Detail; showDet
                         title: 'Delete comment?',
                         body: 'The comment will be permanently deleted.',
                         label: 'Delete comment',
-                        run: () => run(() => del(`/comments/${it.c.id}`)).then(() => reload()),
+                        run: () => run(() => del(`/comments/${it.c.id}`)),
                       })
                     }
                   >

@@ -6,6 +6,7 @@ Flowdeck’s own code has **no license chosen yet** (see README). The packages b
 
 | Package | Version | License | Purpose |
 |---|---|---|---|
+| @fastify/compress | 9.2.1 | MIT | Response compression |
 | @fastify/cookie | 11.1.3 | MIT | Session cookies |
 | @fastify/multipart | 10.1.3 | MIT | Streaming file uploads |
 | @fastify/rate-limit | 11.2.1 | MIT | Login rate limiting |
@@ -59,7 +60,7 @@ Flowdeck’s own code has **no license chosen yet** (see README). The packages b
 
 ## All installed packages by license
 
-- MIT: 199
+- MIT: 201
 - ISC: 17
 - Apache-2.0: 7
 - BSD-3-Clause: 5

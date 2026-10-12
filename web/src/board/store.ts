@@ -86,7 +86,7 @@ export function fromSnapshot(s: any): BoardState {
   };
 }
 
-const byPos = (a: { position: string; id: string }, b: { position: string; id: string }) =>
+export const byPos = (a: { position: string; id: string }, b: { position: string; id: string }) =>
   a.position < b.position ? -1 : a.position > b.position ? 1 : a.id < b.id ? -1 : 1;
 
 export function sortedLists(s: BoardState) {

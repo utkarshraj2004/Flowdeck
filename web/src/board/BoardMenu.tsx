@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { del, get, patch, post, put } from '../api';
 import { useAuth } from '../auth';
 import { ConfirmDialog, Modal } from '../components/Modal';
-import { Avatar, BACKGROUNDS, Markdown, timeAgo } from '../components/ui';
+import { Avatar, BACKGROUNDS, timeAgo } from '../components/ui';
+import { Markdown } from '../components/Markdown';
 import { useBoard } from './context';
 import { describeActivity } from './store';
 

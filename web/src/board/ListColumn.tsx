@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -7,35 +7,39 @@ import { del, get, patch, post, put } from '../api';
 import { Avatar, DUE_TEXT, dueState, formatDate, LabelChip } from '../components/ui';
 import { ConfirmDialog, Modal } from '../components/Modal';
 import { useToasts } from '../components/Toasts';
-import { useBoard } from './context';
-import type { Card, Label, List, Member } from './store';
+import { useBoard, useBoardActions } from './context';
+import type { Card, List } from './store';
+import type { CardView } from './BoardPage';
 
-export function ListColumn({
+export const ListColumn = memo(function ListColumn({
   list,
-  cardIds,
+  cards,
   countText,
   onCardKey,
   movingCardId,
   allLists,
+  view,
+  watching,
 }: {
   list: List;
-  cardIds: string[];
+  cards: Card[];
   countText: string;
   onCardKey: (e: React.KeyboardEvent, c: Card) => void;
   movingCardId: string | null;
   allLists: List[];
+  view: CardView;
+  watching: boolean;
 }) {
-  const { state, run, reload } = useBoard();
+  const { run, reload } = useBoardActions();
   const { push } = useToasts();
-  const can = state.access.can;
+  const can = { edit: view.canEdit };
+  const cardIds = cards.map((c) => c.id);
   const sortable = useSortable({ id: `list:${list.id}`, disabled: !can.edit });
   const { setNodeRef: setDropRef } = useDroppable({ id: `listbody:${list.id}` });
   const [composer, setComposer] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [menu, setMenu] = useState(false);
   const [dialog, setDialog] = useState<'move' | 'moveAll' | 'archive' | null>(null);
-  const membersById = Object.fromEntries(state.members.map((m) => [m.id, m]));
-  const watching = state.watchedListIds.includes(list.id);
   const style = { transform: CSS.Translate.toString(sortable.transform), transition: sortable.transition, opacity: sortable.isDragging ? 0.5 : 1 };
 
   return (
@@ -129,11 +133,9 @@ export function ListColumn({
       <div ref={setDropRef} className="list-cards">
         <SortableContext items={cardIds.map((id) => `card:${id}`)} strategy={verticalListSortingStrategy} disabled={!can.edit || !!movingCardId}>
           <ol className="cards" aria-label={`Cards in ${list.name}`}>
-            {cardIds.map((id) =>
-              state.cards[id] ? (
-                <SortableCard key={id} card={state.cards[id]} labels={state.labels} membersById={membersById} onKey={onCardKey} moving={movingCardId === id} />
-              ) : null,
-            )}
+            {cards.map((c) => (
+              <SortableCard key={c.id} card={c} view={view} onKey={onCardKey} moving={movingCardId === c.id} />
+            ))}
           </ol>
         </SortableContext>
         {composer && <CardComposer listId={list.id} onClose={() => setComposer(false)} />}
@@ -175,7 +177,7 @@ export function ListColumn({
   function pushUndo(l: List) {
     push({ kind: 'info', text: `Archived list “${l.name}”.`, action: { label: 'Undo', run: () => run(() => post(`/lists/${l.id}/restore`)) } });
   }
-}
+});
 
 function MoveListDialog({ list, lists, onClose }: { list: List; lists: List[]; onClose: () => void }) {
   const { state, run } = useBoard();
@@ -235,37 +237,35 @@ function MoveListDialog({ list, lists, onClose }: { list: List; lists: List[]; o
   );
 }
 
-function SortableCard({ card, labels, membersById, onKey, moving }: { card: Card; labels: Label[]; membersById: Record<string, Member>; onKey: (e: React.KeyboardEvent, c: Card) => void; moving: boolean }) {
+const SortableCard = memo(function SortableCard({ card, view, onKey, moving }: { card: Card; view: CardView; onKey: (e: React.KeyboardEvent, c: Card) => void; moving: boolean }) {
   const { attributes: _a, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `card:${card.id}` });
   const style = { transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
   return (
     <li ref={setNodeRef} style={style} {...listeners}>
-      <CardTile card={card} labels={labels} membersById={membersById} onKey={onKey} moving={moving} />
+      <CardTile card={card} view={view} onKey={onKey} moving={moving} />
     </li>
   );
-}
+});
 
-export function CardTile({
+export const CardTile = memo(function CardTile({
   card,
-  labels,
-  membersById,
+  view,
   onKey,
   moving,
   overlay,
 }: {
   card: Card;
-  labels: Label[];
-  membersById: Record<string, Member>;
+  view: CardView;
   onKey?: (e: React.KeyboardEvent, c: Card) => void;
   moving?: boolean;
   overlay?: boolean;
 }) {
-  const nav = useNavigate();
-  const { state } = useBoard();
+  const { openCard } = useBoardActions();
+  const { labels, membersById } = view;
   const cardLabels = labels.filter((l) => card.labelIds.includes(l.id));
   const ds = dueState(card.dueAt, card.dueComplete);
   const b = card.badges;
-  const coverImg = card.cover?.attachmentId && state.board.prefs.cardCovers !== false ? `/api/v1/attachments/${card.cover.attachmentId}/download` : null;
+  const coverImg = card.cover?.attachmentId && view.covers ? `/api/v1/attachments/${card.cover.attachmentId}/download` : null;
   return (
     <div
       className={`card-tile ${moving ? 'moving' : ''} ${overlay ? 'overlay' : ''}`}
@@ -275,7 +275,7 @@ export function CardTile({
       aria-roledescription="card"
       aria-label={`${card.name}${cardLabels.length ? `, labels ${cardLabels.map((l) => l.name || l.color).join(', ')}` : ''}${card.dueAt ? `, ${DUE_TEXT[ds]} ${formatDate(card.dueAt)}` : ''}`}
       aria-pressed={moving ? true : undefined}
-      onClick={() => !overlay && nav(`/b/${state.board.shortId}/c/${card.number}${location.search}`)}
+      onClick={() => !overlay && openCard(card.number)}
       onKeyDown={(e) => onKey?.(e, card)}
     >
       {card.cover?.color && <div className={`card-cover label-${card.cover.color}`} aria-hidden="true" />}
@@ -320,10 +320,10 @@ export function CardTile({
       </div>
     </div>
   );
-}
+});
 
 function CardComposer({ listId, onClose }: { listId: string; onClose: () => void }) {
-  const { run } = useBoard();
+  const { run } = useBoardActions();
   const ref = useRef<HTMLTextAreaElement>(null);
   const [error, setError] = useState('');
   const { push } = useToasts();
@@ -385,8 +385,8 @@ function CardComposer({ listId, onClose }: { listId: string; onClose: () => void
 }
 
 export function AddList() {
-  const { state, run } = useBoard();
-  const [open, setOpen] = useState(state && Object.keys(state.lists).length === 0);
+  const { getState, run } = useBoardActions();
+  const [open, setOpen] = useState(() => Object.keys(getState().lists).length === 0);
   const ref = useRef<HTMLInputElement>(null);
   if (!open)
     return (
@@ -404,7 +404,7 @@ export function AddList() {
           e.preventDefault();
           const name = ref.current!.value.trim();
           if (!name) return;
-          await run(() => post(`/boards/${state.board.id}/lists`, { name }));
+          await run(() => post(`/boards/${getState().board.id}/lists`, { name }));
           ref.current!.value = '';
           ref.current!.focus();
         }}

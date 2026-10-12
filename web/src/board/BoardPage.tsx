@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   AutoScrollActivator,
@@ -25,15 +25,38 @@ import { useToasts } from '../components/Toasts';
 import { Avatar, Spinner, dueState } from '../components/ui';
 import { isTypingTarget } from '../components/Shortcuts';
 import { NotFoundPage } from '../pages/NotFound';
-import { BoardContext, useBoard as useContextSafe, type BoardCtx } from './context';
-import { cardsInList, fromSnapshot, reduceEvent, sortedLists, type BoardEvent, type BoardState, type Card } from './store';
+import { BoardActionsContext, BoardContext, useBoard as useContextSafe, type BoardActions, type BoardCtx } from './context';
+import { byPos, cardsInList, fromSnapshot, reduceEvent, sortedLists, type BoardEvent, type BoardState, type Card, type List } from './store';
 import { AddList, CardTile, ListColumn } from './ListColumn';
-import { CardModal } from './CardModal';
-import { BoardMenu } from './BoardMenu';
-import { MembersDialog } from './MembersDialog';
+import { loadCardModal } from './lazy';
+
+const CardModal = lazy(() => loadCardModal().then((m) => ({ default: m.CardModal })));
+const BoardMenu = lazy(() => import('./BoardMenu').then((m) => ({ default: m.BoardMenu })));
+const MembersDialog = lazy(() => import('./MembersDialog').then((m) => ({ default: m.MembersDialog })));
 import { FilterPanel, filterFromParams, matchesFilter, type Filter } from './Filter';
 
 type Cols = Record<string, string[]>;
+const EMPTY: Card[] = [];
+
+/** Board-wide data every card tile needs; changes only when labels, members, edit rights or cover settings change. */
+export interface CardView {
+  shortId: string;
+  labels: BoardState['labels'];
+  membersById: Record<string, BoardState['members'][number]>;
+  canEdit: boolean;
+  covers: boolean;
+}
+function useCardView(state: BoardState | null): CardView | null {
+  const labels = state?.labels;
+  const members = state?.members;
+  const shortId = state?.board.shortId;
+  const canEdit = !!state?.access.can.edit;
+  const covers = state?.board.prefs.cardCovers !== false;
+  return useMemo(
+    () => (labels && members && shortId ? { shortId, labels, membersById: Object.fromEntries(members.map((m) => [m.id, m])), canEdit, covers } : null),
+    [labels, members, shortId, canEdit, covers],
+  );
+}
 
 export function BoardPage() {
   const { shortId, cardNumber } = useParams();
@@ -98,6 +121,11 @@ export function BoardPage() {
     setState(null);
     load();
   }, [load]);
+  // The card dialog is a separate chunk: fetch it while the user looks at the board.
+  useEffect(() => {
+    const t = window.setTimeout(() => void loadCardModal(), 300);
+    return () => window.clearTimeout(t);
+  }, []);
 
   const boardId = state?.board.id;
   useEffect(() => {
@@ -166,23 +194,26 @@ export function BoardPage() {
     [ingest, push, load],
   );
 
-  const ctx: BoardCtx | null = useMemo(
-    () =>
-      state && {
-        state,
-        ingest,
-        reload: load,
-        onEvent: (fn) => {
-          listeners.current.add(fn);
-          return () => listeners.current.delete(fn);
-        },
-        editing,
-        presence,
-        announce,
-        run,
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const navRef = useRef(nav);
+  navRef.current = nav;
+  const actions: BoardActions = useMemo(
+    () => ({
+      ingest,
+      reload: load,
+      onEvent: (fn) => {
+        listeners.current.add(fn);
+        return () => listeners.current.delete(fn);
       },
-    [state, ingest, load, editing, presence, announce, run],
+      announce,
+      run,
+      getState: () => stateRef.current!,
+      openCard: (n: number) => stateRef.current && navRef.current(`/b/${stateRef.current.board.shortId}/c/${n}${location.search}`),
+    }),
+    [ingest, load, announce, run],
   );
+  const ctx: BoardCtx | null = useMemo(() => state && { ...actions, state, editing, presence }, [actions, state, editing, presence]);
 
   // ---- filter ----
   // Filter state is local (synchronous, so controls never flicker) and mirrored into the URL so it can be shared.
@@ -198,18 +229,42 @@ export function BoardPage() {
   };
 
   // ---- columns (visible cards per list), drag state and keyboard moves ----
-  const lists = state ? sortedLists(state) : [];
-  const baseCols: Cols = useMemo(() => {
-    if (!state) return {};
-    const cols: Cols = {};
-    for (const l of sortedLists(state)) cols[l.id] = cardsInList(state, l.id).filter((c) => matchesFilter(c, filter, me!.id)).map((c) => c.id);
-    return cols;
+  const listsMap = state?.lists;
+  const lists: List[] = useMemo(() => (listsMap ? Object.values(listsMap).filter((l) => !l.archivedAt).sort(byPos) : []), [listsMap]);
+  // Typing in the filter stays responsive: the board re-filters at a lower priority.
+  const deferredFilter = useDeferredValue(filter);
+  const cardsMap = state?.cards;
+  const { baseCols, totals } = useMemo(() => {
+    const byList: Record<string, Card[]> = {};
+    const totals: Record<string, number> = {};
+    for (const c of Object.values(cardsMap ?? {})) {
+      if (c.archivedAt) continue;
+      totals[c.listId] = (totals[c.listId] ?? 0) + 1;
+      if (matchesFilter(c, deferredFilter, me!.id)) (byList[c.listId] ??= []).push(c);
+    }
+    const baseCols: Cols = {};
+    for (const l of lists) baseCols[l.id] = (byList[l.id] ?? []).sort(byPos).map((c) => c.id);
+    return { baseCols, totals };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, filter]);
+  }, [cardsMap, lists, deferredFilter]);
   const [dragCols, setDragCols] = useState<Cols | null>(null);
   const [activeDrag, setActiveDrag] = useState<string | null>(null);
   const [kbMove, setKbMove] = useState<{ cardId: string } | null>(null);
   const cols = dragCols ?? baseCols;
+  // Per-list card arrays keep their identity while unchanged, so memoised lists and cards skip re-rendering.
+  const colCache = useRef<Record<string, Card[]>>({});
+  const colCards = useMemo(() => {
+    const out: Record<string, Card[]> = {};
+    for (const [listId, ids] of Object.entries(cols)) {
+      const next: Card[] = [];
+      for (const id of ids) if (cardsMap?.[id]) next.push(cardsMap[id]);
+      const prev = colCache.current[listId];
+      out[listId] = prev && prev.length === next.length && prev.every((c, i) => c === next[i]) ? prev : next;
+    }
+    colCache.current = out;
+    return out;
+  }, [cols, cardsMap]);
+  const view = useCardView(state);
   const findList = (c: Cols, cardId: string) => Object.keys(c).find((l) => c[l].includes(cardId));
 
   const commitCardMove = useCallback(
@@ -276,7 +331,7 @@ export function BoardPage() {
   const onDragStart = (e: DragStartEvent) => {
     const id = String(e.active.id);
     setActiveDrag(id);
-    if (id.startsWith('card:')) setDragCols(structuredClone(baseCols));
+    if (id.startsWith('card:')) setDragCols({ ...baseCols });
   };
   const onDragOver = (e: DragOverEvent) => {
     const id = String(e.active.id);
@@ -375,7 +430,7 @@ export function BoardPage() {
       case ' ':
         e.preventDefault();
         if (!can.edit) return announce('You can’t move cards on this board.');
-        setDragCols(structuredClone(baseCols));
+        setDragCols({ ...baseCols });
         setKbMove({ cardId: card.id });
         announce(`Picked up “${card.name}”. Use the arrow keys to move it, Enter to drop, Escape to cancel.`);
         break;
@@ -427,6 +482,10 @@ export function BoardPage() {
     }
   };
 
+  const cardKeyRef = useRef(onCardKey);
+  cardKeyRef.current = onCardKey;
+  const stableCardKey = useCallback((e: React.KeyboardEvent, c: Card) => cardKeyRef.current(e, c), []);
+
   // Board-level shortcuts.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -463,12 +522,12 @@ export function BoardPage() {
 
   const { board, access } = state;
   const visibleCount = (listId: string) => cols[listId]?.length ?? 0;
-  const totalCount = (listId: string) => cardsInList(state, listId).length;
+  const totalCount = (listId: string) => totals[listId] ?? 0;
   const activeCard = activeDrag?.startsWith('card:') ? state.cards[activeDrag.slice(5)] : null;
-  const membersById = Object.fromEntries(state.members.map((m) => [m.id, m]));
   const online = presence.filter((id) => id !== me!.id);
 
   return (
+    <BoardActionsContext.Provider value={actions}>
     <BoardContext.Provider value={ctx}>
       <div className={`board bg-${board.background}`}>
         <div className="board-header">
@@ -548,17 +607,19 @@ export function BoardPage() {
                   <ListColumn
                     key={l.id}
                     list={l}
-                    cardIds={cols[l.id] ?? []}
+                    cards={colCards[l.id] ?? EMPTY}
                     countText={filterActive ? `${visibleCount(l.id)} of ${totalCount(l.id)}` : String(totalCount(l.id))}
-                    onCardKey={onCardKey}
-                    movingCardId={kbMove?.cardId ?? null}
+                    onCardKey={stableCardKey}
+                    movingCardId={kbMove && cols[l.id]?.includes(kbMove.cardId) ? kbMove.cardId : null}
                     allLists={lists}
+                    view={view!}
+                    watching={state.watchedListIds.includes(l.id)}
                   />
                 ))}
                 {access.can.edit && <AddList />}
               </ol>
             </SortableContext>
-            <DragOverlay>{activeCard ? <CardTile card={activeCard} overlay labels={state.labels} membersById={membersById} /> : null}</DragOverlay>
+            <DragOverlay>{activeCard ? <CardTile card={activeCard} overlay view={view!} /> : null}</DragOverlay>
           </DndContext>
           {lists.length === 0 && !access.can.edit && <p className="board-empty">This board has no lists yet.</p>}
         </div>
@@ -566,10 +627,13 @@ export function BoardPage() {
           {announcement}
         </div>
       </div>
-      {cardNumber && <CardModal key={cardNumber} number={Number(cardNumber)} onClose={() => nav(`/b/${board.shortId}${location.search}`)} />}
-      {showMenu && <BoardMenu onClose={() => setShowMenu(false)} />}
-      {showMembers && <MembersDialog onClose={() => setShowMembers(false)} />}
+      <Suspense fallback={null}>
+        {cardNumber && <CardModal key={cardNumber} number={Number(cardNumber)} onClose={() => nav(`/b/${board.shortId}${location.search}`)} />}
+        {showMenu && <BoardMenu onClose={() => setShowMenu(false)} />}
+        {showMembers && <MembersDialog onClose={() => setShowMembers(false)} />}
+      </Suspense>
     </BoardContext.Provider>
+    </BoardActionsContext.Provider>
   );
 }
 

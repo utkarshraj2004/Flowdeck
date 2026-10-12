@@ -8,6 +8,7 @@
 // Every timing is the median of several runs. Run two builds on the same machine back to back to compare.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
@@ -21,6 +22,7 @@ const LISTS = Number(args.lists ?? 12);
 const CARDS = Number(args.cards ?? 100);
 const RUNS = Number(args.runs ?? 5);
 const OUT = args.out;
+const PROFILE_DIR = args.profile; // optional: write CPU profiles of the filter and drag steps here
 const BASE = `http://127.0.0.1:${PORT}`;
 const ADMIN_URL = process.env.TEST_DATABASE_URL || 'postgres://flowdeck:flowdeck@localhost:5432/postgres';
 const DB = `flowdeck_perf_${PORT}`;
@@ -32,6 +34,33 @@ const median = (xs) => {
 };
 let seed = 1234567;
 const rand = (n) => ((seed = (seed * 1103515245 + 12345) % 2 ** 31), seed % n);
+
+/** Main-thread time (CDP Performance metrics, in ms) spent while `fn` runs: total task, script, layout, style. */
+async function mainThread(page, fn) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Performance.enable');
+  const read = async () => Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map((m) => [m.name, m.value]));
+  const a = await read();
+  await fn();
+  const b = await read();
+  await cdp.detach();
+  const d = (k) => Math.round((b[k] - a[k]) * 1000);
+  return { taskMs: d('TaskDuration'), scriptMs: d('ScriptDuration'), layoutMs: d('LayoutDuration'), styleMs: d('RecalcStyleDuration') };
+}
+
+async function profile(page, name) {
+  if (!PROFILE_DIR) return async () => {};
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Profiler.enable');
+  await cdp.send('Profiler.setSamplingInterval', { interval: 200 });
+  await cdp.send('Profiler.start');
+  return async () => {
+    const { profile: p } = await cdp.send('Profiler.stop');
+    fs.mkdirSync(PROFILE_DIR, { recursive: true });
+    fs.writeFileSync(path.join(PROFILE_DIR, `${name}.cpuprofile`), JSON.stringify(p));
+    await cdp.detach();
+  };
+}
 
 async function resetDb() {
   const c = new pg.Client({ connectionString: ADMIN_URL });
@@ -140,11 +169,19 @@ async function measure(a, b, board, lists) {
   let snapBytes = 0;
   for (let i = 0; i < RUNS + 1; i++) {
     const t0 = performance.now();
-    const r = await fetch(`${BASE}/api/v1/boards/${board.id}`, { headers: { cookie: a.cookie, 'accept-encoding': 'gzip' } });
-    const buf = Buffer.from(await r.arrayBuffer());
+    // Raw bytes as sent (node:http does not decompress), with the encodings a browser offers.
+    const r = await new Promise((resolve, reject) =>
+      http
+        .get(`${BASE}/api/v1/boards/${board.id}`, { headers: { cookie: a.cookie, 'accept-encoding': 'gzip, deflate, br' } }, (res) => {
+          const chunks = [];
+          res.on('data', (d) => chunks.push(d));
+          res.on('end', () => resolve({ buf: Buffer.concat(chunks), encoding: res.headers['content-encoding'] }));
+        })
+        .on('error', reject),
+    );
     if (i > 0) snapTimes.push(performance.now() - t0); // first is warm-up
-    snapBytes = buf.length;
-    out.snapshotEncoding = r.headers.get('content-encoding') ?? 'identity';
+    snapBytes = r.buf.length;
+    out.snapshotEncoding = r.encoding ?? 'identity';
   }
   out.apiSnapshotMs = median(snapTimes);
   out.apiSnapshotBytesOnWire = snapBytes;
@@ -171,6 +208,9 @@ async function measure(a, b, board, lists) {
   out.jsBytes = js.reduce((s, f) => s + fs.statSync(path.join(assets, f)).size, 0);
   out.jsGzipBytes = js.reduce((s, f) => s + zlib.gzipSync(fs.readFileSync(path.join(assets, f))).length, 0);
   out.jsFiles = js.length;
+  // The entry script named in index.html (what every page downloads before anything renders).
+  const entry = fs.readFileSync(path.join(ROOT, 'dist/web/index.html'), 'utf8').match(/src="\/assets\/([^"]+\.js)"/)?.[1];
+  if (entry) out.jsEntryGzipBytes = zlib.gzipSync(fs.readFileSync(path.join(assets, entry))).length;
 
   const browser = await chromium.launch({ executablePath: CHROMIUM });
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -212,9 +252,11 @@ async function measure(a, b, board, lists) {
     window.__lt = 0;
     new PerformanceObserver((l) => l.getEntries().forEach((e) => (window.__lt += e.duration))).observe({ type: 'longtask', buffered: false });
   });
-  for (let i = 0; i < 20; i++) await b.call('PATCH', `/cards/${card0.id}`, { name: `Burst ${i}` });
-  await page.waitForFunction(() => [...document.querySelectorAll('[data-card-id]')].some((e) => e.textContent?.includes('Burst 19')));
-  await page.waitForTimeout(300);
+  out.mainThreadFor20RemoteEvents = await mainThread(page, async () => {
+    for (let i = 0; i < 20; i++) await b.call('PATCH', `/cards/${card0.id}`, { name: `Burst ${i}` });
+    await page.waitForFunction(() => [...document.querySelectorAll('[data-card-id]')].some((e) => e.textContent?.includes('Burst 19')));
+    await page.waitForTimeout(300);
+  });
   out.longTaskMsFor20RemoteEvents = Math.round(await page.evaluate(() => window.__lt));
 
   // 6. Open a card dialog: click → title rendered; count API calls
@@ -277,10 +319,14 @@ async function measure(a, b, board, lists) {
     await page.keyboard.press('f');
     const kw = page.getByLabel('Keyword');
     await kw.waitFor();
-    const t0 = Date.now();
-    await kw.pressSequentially('Task 999', { delay: 0 });
-    await page.waitForFunction(() => document.querySelectorAll('[data-card-id]').length <= 3, null, { polling: 'raf' });
-    out.filterType8CharsMs = Date.now() - t0;
+    const stop = await profile(page, 'filter');
+    out.mainThreadForFilterTyping = await mainThread(page, async () => {
+      const t0 = Date.now();
+      await kw.pressSequentially('Task 999', { delay: 0 });
+      await page.waitForFunction(() => document.querySelectorAll('[data-card-id]').length <= 3, null, { polling: 'raf' });
+      out.filterType8CharsMs = Date.now() - t0;
+    });
+    await stop();
     await kw.fill('');
     await page.keyboard.press('Escape');
     await page.goto(`${BASE}/b/${board.shortId}`);
