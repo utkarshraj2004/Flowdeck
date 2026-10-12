@@ -44,7 +44,8 @@ export async function buildApp(config: Config, opts: { db?: Db; logger?: boolean
   app.decorateRequest('user', null);
 
   await app.register(cookie);
-  await app.register(rateLimit, { global: false });
+  // preHandler so the login limiter can key on the submitted email (body is parsed by then).
+  await app.register(rateLimit, { global: false, hook: 'preHandler' });
   await app.register(multipart, { limits: { fileSize: config.maxUploadBytes, files: 1, fields: 5 } });
   await app.register(websocket, { options: { maxPayload: 64 * 1024 } });
 

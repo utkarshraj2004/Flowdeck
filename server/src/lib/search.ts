@@ -83,9 +83,11 @@ export function termsToSql(terms: Term[], params: unknown[], userId: string): { 
         break;
       case 'is':
         if (t.value === 'archived') {
-          includeArchived = true;
-          cond = t.negate ? null : `(c.archived_at IS NOT NULL OR l.archived_at IS NOT NULL)`;
-          if (t.negate) includeArchived = false;
+          // is:archived shows only archived cards; -is:archived is the default (open only).
+          if (!t.negate) {
+            includeArchived = true;
+            where.push(`(c.archived_at IS NOT NULL OR l.archived_at IS NOT NULL)`);
+          }
           continue;
         } else if (t.value === 'open') cond = `(c.archived_at IS NULL AND l.archived_at IS NULL)`;
         else if (t.value === 'complete') cond = `c.due_complete`;
