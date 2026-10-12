@@ -123,6 +123,29 @@ describe('moving and copying across boards', () => {
   });
 });
 
+describe('moving a list to another board', () => {
+  it('moves the list with its cards, renumbers cards, maps labels and drops non-member assignees', async () => {
+    const src = (await a.post('/boards', { workspaceId, name: 'Source', defaultLists: false })).body.board;
+    const dst = (await a.post('/boards', { workspaceId, name: 'Destination' })).body.board;
+    const srcLabels = (await a.get(`/boards/${src.id}`)).body.labels;
+    await a.patch(`/labels/${srcLabels[0].id}`, { name: 'Design' });
+    await a.post(`/boards/${src.id}/members`, { userId: b.user.id });
+    const l = (await a.post(`/boards/${src.id}/lists`, { name: 'Travelling list' })).body.list;
+    const card = (await a.post(`/lists/${l.id}/cards`, { name: 'Rides along' })).body.card;
+    await a.put(`/cards/${card.id}/labels/${srcLabels[0].id}`);
+    await a.put(`/cards/${card.id}/members/${b.user.id}`);
+    const dstBefore = (await a.get(`/boards/${dst.id}`)).body;
+    const r = await a.post(`/lists/${l.id}/move`, { boardId: dst.id, position: { afterId: dstBefore.lists[0].id } });
+    expect(r.status).toBe(200);
+    const after = (await a.get(`/boards/${dst.id}`)).body;
+    expect(after.lists.map((x: any) => x.name)).toEqual(['To do', 'Travelling list', 'Doing', 'Done']);
+    const moved = after.cards.find((c: any) => c.id === card.id);
+    expect(moved.memberIds).toEqual([]);
+    expect(after.labels.find((x: any) => x.id === moved.labelIds[0]).name).toBe('Design');
+    expect((await a.get(`/boards/${src.id}`)).body.lists).toHaveLength(0);
+  });
+});
+
 describe('board lifecycle and export', () => {
   it('export contains every entity and the full activity log', async () => {
     const r = await a.get(`/boards/${boardId}/export`);

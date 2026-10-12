@@ -19,3 +19,13 @@ describe('search query parser', () => {
     expect(parseQuery('foo:bar')).toEqual([{ kind: 'text', value: 'foo:bar', negate: false }]);
   });
 });
+
+import { redactUrl } from '../../server/src/app.js';
+describe('log redaction', () => {
+  it('removes setup and invite tokens from logged URLs', () => {
+    expect(redactUrl('/api/v1/setup/abcDEF123_-')).toBe('/api/v1/setup/[redacted]');
+    expect(redactUrl('/api/v1/invites/tok123/accept')).toBe('/api/v1/invites/[redacted]/accept');
+    expect(redactUrl('/invite/tok123')).toBe('/invite/[redacted]');
+    expect(redactUrl('/api/v1/boards/abc')).toBe('/api/v1/boards/abc');
+  });
+});

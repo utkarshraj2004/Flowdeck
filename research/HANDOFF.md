@@ -1,3 +1,5 @@
+> **Superseded for current work (2026-10-12):** implementation has started. This file is the *research* handoff and is kept for reference. For the application's state, read [docs/HANDOFF.md](../docs/HANDOFF.md).
+
 # Handoff: Trello parity research (session 5 complete, 2026-10-12)
 
 > **Read this first.** This file and PR #3 are the current state. Statements in older files that say the test accounts cannot collaborate, that Account 2 "is not a member", or that the 409 billing check is the cause are **superseded** by session 5 ([evidence/E-session5.md](evidence/E-session5.md)).

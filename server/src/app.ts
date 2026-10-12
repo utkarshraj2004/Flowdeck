@@ -27,6 +27,10 @@ import { wsRoutes } from './routes/ws.js';
 
 export const VERSION = '0.1.0';
 
+export function redactUrl(url: string) {
+  return url.replace(/\/(setup|invites?)\/[^/?#]+/g, '/$1/[redacted]');
+}
+
 const PUBLIC_UNSAFE = new Set(['/api/v1/auth/login']);
 
 export async function buildApp(config: Config, opts: { db?: Db; logger?: boolean } = {}): Promise<FastifyInstance & { ctx: Ctx }> {
@@ -36,7 +40,14 @@ export async function buildApp(config: Config, opts: { db?: Db; logger?: boolean
   fs.mkdirSync(config.uploadDir, { recursive: true });
 
   const app = Fastify({
-    logger: opts.logger ?? false,
+    // Setup, reset and invite tokens travel in URL paths: never write them to logs.
+    logger: (opts.logger ?? false)
+      ? {
+          serializers: {
+            req: (req: { method: string; url: string }) => ({ method: req.method, url: redactUrl(req.url) }),
+          },
+        }
+      : false,
     trustProxy: config.trustProxy,
     bodyLimit: 1024 * 1024,
   }) as unknown as FastifyInstance & { ctx: Ctx };
