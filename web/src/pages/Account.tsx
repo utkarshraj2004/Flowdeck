@@ -1,14 +1,42 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { patch, post } from '../api';
 import { useAuth } from '../auth';
 import { useToasts } from '../components/Toasts';
 
+/** Notification kinds a person can turn off, with plain-language descriptions (matches the server's mutable list). */
+const NOTIFICATION_KINDS: { kind: string; title: string; desc: string }[] = [
+  { kind: 'mentioned', title: 'Someone mentions you', desc: 'An @mention of you in a comment.' },
+  { kind: 'commented', title: 'New comments', desc: 'Someone comments on a card you’re on or watching.' },
+  { kind: 'added_to_card', title: 'You’re added to a card', desc: 'Someone makes you a member of a card.' },
+  { kind: 'removed_from_card', title: 'You’re removed from a card', desc: 'Someone takes you off a card.' },
+  { kind: 'due_changed', title: 'Dates change', desc: 'The start or due date changes on a card you’re on or watching.' },
+  { kind: 'completed', title: 'Cards are marked complete', desc: 'A card you’re on or watching is marked complete.' },
+  { kind: 'attachment_added', title: 'Files are attached', desc: 'Someone attaches a file or link to a card you’re on or watching.' },
+  { kind: 'card_moved', title: 'Cards move', desc: 'A card you’re on or watching moves to another list.' },
+  { kind: 'card_archived', title: 'Cards are archived', desc: 'A card you’re on or watching is archived.' },
+  { kind: 'card_created', title: 'New cards on watched lists and boards', desc: 'Someone adds a card where you’re watching.' },
+  { kind: 'added_to_board', title: 'You’re added to a board', desc: 'Someone adds you as a board member.' },
+  { kind: 'invite_accepted', title: 'Your invitation is accepted', desc: 'Someone joins a workspace with an invitation you sent.' },
+];
+
 export function AccountPage() {
   const { me, setMe } = useAuth();
   const { push } = useToasts();
+  const loc = useLocation();
+  const [muted, setMuted] = useState<string[]>(me?.prefs.mutedNotifications ?? []);
+  const [savingNotifs, setSavingNotifs] = useState(false);
   useEffect(() => {
     document.title = 'Account · Flowdeck';
   }, []);
+  // Links such as "Notification settings" in the notifications drawer point at a section (#notifications).
+  useEffect(() => {
+    if (!loc.hash) return;
+    const el = document.getElementById(decodeURIComponent(loc.hash.slice(1)));
+    if (!el) return;
+    el.scrollIntoView({ block: 'start' });
+    el.querySelector<HTMLElement>('h2')?.focus({ preventScroll: true });
+  }, [loc.hash]);
   if (!me) return null;
   return (
     <div className="page narrow stack">
@@ -19,7 +47,7 @@ export function AccountPage() {
           e.preventDefault();
           const f = new FormData(e.currentTarget);
           try {
-            const r = await patch('/me', { fullName: f.get('fullName'), prefs: { colorBlind: f.get('colorBlind') === 'on', shortcuts: f.get('shortcuts') === 'on' } });
+            const r = await patch('/me', { fullName: f.get('fullName'), prefs: { colorBlind: f.get('colorBlind') === 'on', shortcuts: f.get('shortcuts') === 'on', labelNames: f.get('labelNames') === 'on' } });
             setMe(r.user);
             push({ kind: 'success', text: 'Settings saved' });
           } catch (err) {
@@ -40,6 +68,9 @@ export function AccountPage() {
         </label>
         <label className="row">
           <input type="checkbox" name="shortcuts" defaultChecked={me.prefs.shortcuts} /> Keyboard shortcuts
+        </label>
+        <label className="row">
+          <input type="checkbox" name="labelNames" defaultChecked={!!me.prefs.labelNames} /> Show label names on cards
         </label>
         <button className="btn btn-primary">Save</button>
       </form>
@@ -68,6 +99,52 @@ export function AccountPage() {
           <input name="newPassword" type="password" required minLength={12} autoComplete="new-password" />
         </label>
         <button className="btn btn-primary">Change password</button>
+      </form>
+      <form
+        id="notifications"
+        className="panel stack account-notifications"
+        aria-labelledby="notifications-title"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setSavingNotifs(true);
+          try {
+            const r = await patch('/me', { prefs: { mutedNotifications: muted } });
+            setMe(r.user);
+            push({ kind: 'success', text: 'Notification settings saved' });
+          } catch (err) {
+            push({ kind: 'error', text: (err as Error).message });
+          } finally {
+            setSavingNotifs(false);
+          }
+        }}
+      >
+        <h2 id="notifications-title" tabIndex={-1}>
+          Notifications
+        </h2>
+        <p className="muted small">Choose what Flowdeck tells you about. Unticked kinds are not delivered to you at all.</p>
+        <fieldset className="notif-kinds">
+          <legend className="visually-hidden">Notify me when</legend>
+          {NOTIFICATION_KINDS.map(({ kind, title, desc }) => (
+            <label key={kind} className="notif-kind">
+              <input
+                type="checkbox"
+                checked={!muted.includes(kind)}
+                onChange={(e) => setMuted((m) => (e.target.checked ? m.filter((k) => k !== kind) : [...m, kind]))}
+                aria-describedby={`notif-kind-${kind}`}
+              />
+              <span>
+                <span className="notif-kind-title">{title}</span>
+                <span className="muted small" id={`notif-kind-${kind}`}>
+                  {desc}
+                </span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+        <p className="muted small">Changes to your access — being removed from a board or workspace, or your board role changing — are always delivered.</p>
+        <button className="btn btn-primary" disabled={savingNotifs}>
+          Save notification settings
+        </button>
       </form>
     </div>
   );
