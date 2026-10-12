@@ -17,7 +17,7 @@
 | @mention of a non-member notifies only if the board is workspace-visible. | DOC D22 |
 | Moving a card to a board where its members aren't members removes those members. | DOC D24 |
 
-**Not verified (still, after session 2: login blocked, see [E-session2](evidence/E-session2.md)):** exact behaviour of a *normal* workspace member on a workspace-visible board they haven't joined (view only vs. edit); whether workspace normal members can create invite links on paid plans (DOC D11 gap).
+**Not verified** (*Reconciled 2026-10-12:* login works since session 2; these remain unverified because Account 2 cannot be made a member, see [E-session2-auth §16](evidence/E-session2-auth.md#16--session-4-one-controlled-invitation-attempt-2026-10-12-0950-utc)): exact behaviour of a *normal* workspace member on a workspace-visible board they haven't joined (view only vs. edit); whether workspace normal members can create invite links on paid plans (DOC D11 gap).
 
 ### Observed with the test accounts (OBS O05)
 

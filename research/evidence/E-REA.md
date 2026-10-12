@@ -54,6 +54,8 @@ Not tested: `capture-browser-scenario`, `compare-web-captures`, `compare-web-scr
 
 ## Unblock and resume (original notes)
 
+> *Reconciled 2026-10-12:* historical. These steps were completed in session 2 (network Full, test-account variables set, both accounts logged in). See `../HANDOFF.md`.
+
 1. Allow these hosts in the environment's network settings: `trello.com`, `*.trello.com`, `id.atlassian.com`, `*.atlassian.com`, plus any asset/CDN hosts the login page needs (unknown until the first page loads; REA's `inspect-web-page` resource list will name them, likely including Atlassian's `*.atl-paas.net`).
 2. Create a **dedicated Trello test account** (not your real one) with its own empty workspace, ideally plus a second test account for permission and collaboration checks.
 3. Provide the test account credentials as environment variables, never in chat or in the repo: `TRELLO_TEST_EMAIL`, `TRELLO_TEST_PASSWORD`, and optionally `TRELLO_TEST2_EMAIL` and `TRELLO_TEST2_PASSWORD`. A new session picks them up. Atlassian may require email verification or a CAPTCHA on first login; if so, complete that once yourself.

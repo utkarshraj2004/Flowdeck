@@ -1,6 +1,6 @@
 # 06 · Proposed API and real-time event contracts
 
-**All INF (Flowdeck design).** Trello's REST API (API A01, 324 operations) was used as a completeness checklist, not copied. Trello's WebSocket protocol is **undocumented and unsupported** (DOC D16 notes; community answer), and was **not observed**. Nothing here claims to describe Trello's backend.
+**All INF (Flowdeck design).** Trello's REST API (API A01, 324 operations) was used as a completeness checklist, not copied. Trello's WebSocket protocol is **undocumented and unsupported** (DOC D16 notes; community answer). *Reconciled 2026-10-12:* its connections, reconnect timing and cross-user latency **have since been observed** (O03, E-session2, E-session2-auth §9/§14), but message formats were not reverse-engineered or copied. Nothing here claims to describe Trello's backend.
 
 ## Conventions
 

@@ -21,6 +21,8 @@ Proxy error for every blocked host: `connect_rejected: gateway answered 403 to C
 
 ## Login check (second allowlist update, 2026-10-11)
 
+> *Reconciled 2026-10-12:* historical. Later sessions had all four variables present, Full network access, and both accounts logged in. See [E-session2-auth](E-session2-auth.md) and `../HANDOFF.md`.
+
 - `*.atl-paas.net` now reachable (`id-frontend…`, `trello-bifrost…`, `fd-assets…` → 200). The Atlassian login page renders: **"Log in to continue"** with an Email field (`name=username`, `autocomplete=username`), a password field (`autocomplete=current-password`, revealed after Continue), "Remember me", **Continue**, then **Passkey**, **Google**, **Microsoft**, **Apple**, **Slack**, "Can't log in?", "Create an account" → [screens/obs-login-page.png](screens/obs-login-page.png). No credentials were entered.
 - No CAPTCHA widget was present on load, but the page tried and failed to reach two CAPTCHA providers (proxy 403, `net::ERR_TUNNEL_CONNECTION_FAILED`): `99a173f17960.edge.captcha-sdk.awswaf.com` (AWS WAF CAPTCHA SDK) and `www.recaptcha.net` (Google reCAPTCHA), plus `google.com`. These are likely needed if Atlassian challenges the login.
 - **Login not attempted:** `TRELLO_TEST_EMAIL` / `TRELLO_TEST_PASSWORD` / `TRELLO_TEST2_*` were **not present** in this session's environment (checked by name only). The Trello connector is still bound to the owner's real account, so it was not used for experiments.

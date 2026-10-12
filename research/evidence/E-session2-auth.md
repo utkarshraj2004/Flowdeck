@@ -233,3 +233,45 @@ Read-only check before resuming gaps 1–3. Nothing on the board was created, ed
 | Board visibility | Still **Public**. |
 
 **Result:** the owner's invite step (HANDOFF "Blocker") has not taken effect. Gaps 1–3 (two-user conflict/real-time, member/observer/guest roles, member-triggered notifications) remain **blocked** and were not attempted. Gap 4 (real-phone touch drag) still needs a real device.
+
+## 16 · Session 4: one controlled invitation attempt, 2026-10-12 ~09:50 UTC
+
+Authorized by the owner: Account 1 (A) invites Account 2 (B) as **Member** of FD Parity Board through the normal UI, and B accepts if an invitation arrives. Existing browser sessions from session 3 were reused (both `/1/members/me` → 200); nothing was restarted.
+
+### Pre-checks (read-only, both sessions)
+
+| Check | Result |
+|---|---|
+| Board memberships (`memberships=all`, includes unconfirmed) | Only A (admin). **No pending or unconfirmed membership for B.** |
+| Board prefs | `permissionLevel: public`, `invitations: members`, `selfJoin: true`, `comments: members` |
+| Board limits | All `status: ok` (e.g. `totalMembersPerBoard` disableAt 1600) |
+| Workspace prefs | `externalMembersDisabled: false`, `boardInviteRestrict: "any"`, `orgInviteRestrict: []`, `associatedDomain: null`, permission `private` |
+| Workspace limits | `usersPerFreeOrg` **count 1** of 10 (`status: ok`); `freeBoardsPerOrg` ok; no paid products |
+| Both accounts | `confirmed: true`, `activityBlocked: false`, `loginTypes: ["atlassian"]`, member limits ok; no invitation-related fields |
+| Join requests / B notifications | None new since §14 |
+
+### The attempt (Share dialog, one submission)
+
+Steps: board header **Share** (`data-testid=board-share-button`) → "Email address or name" (`add-members-input`) → typed B's email → **one suggestion** offered and selected (chip shows B's display name) → role **Member** (default) → **Share**. Screens: [s4-inv1](screens/auth-s4-inv1-share-before.png) (before submit), [s4-inv2](screens/auth-s4-inv2-share-after.png) (after). Names and usernames blacked out.
+
+Write requests recorded around the submit (IDs replaced by labels; bodies summarized):
+
+| # | Request | Status | Response |
+|---|---|---|---|
+| 1 | `POST /1/organization/<org>/paidAccount/isFreeToAdd` (body keys `members`, `potentialMembers`) | **409** | `{"error": …, "message": "This account is managed by the commerce platform and cannot be modified by this billing API"}` |
+| 2 | `PUT /1/boards/<board>/members/<B>` (body keys `invitationMessage`, `allowBillableGuest`, `acceptUnconfirmed`) | **200** | Board object whose `memberships` contain **only A**. B is absent. |
+
+Plus routine GraphQL reads, `markAsViewed` and a session heartbeat (all 200). Browser console: one error, "Failed to load resource: … status of 409". **Visible feedback: none.** No toast, no error text, the chip cleared, and **"Board members 1"** remained.
+
+### Afterwards (≈ 20 s later, both sessions)
+
+- A and B both see board memberships = **A only**. Workspace memberships = A only (B: 401). FD Parity Board is not in B's board list.
+- B: **no invitation and no new notification** (newest is still §14's 19:49 UTC watcher notification), so there was nothing to accept.
+
+### Finding
+
+The client first asks Trello's billing service whether adding B is free (B is not a workspace member, so on this board B would be a **guest**). That call fails with **409 "managed by the commerce platform … cannot be modified by this billing API"**: the workspace's billing is held by Atlassian's newer commerce platform, and Trello's legacy billing endpoint refuses to evaluate it. The following add-member call returns 200 but **does not create the membership**, and the UI shows nothing. This matches §11's "200 but no membership" and is the first recorded server-side reason.
+
+What this rules out (from evidence, not assumption): free-plan seat limits (1/10 used), workspace guest restrictions (`externalMembersDisabled: false`), invitation restrictions (`boardInviteRestrict: any`), unconfirmed or blocked accounts. It does **not** show that the email provider is involved: B's account was found by email and resolved to the correct member.
+
+**Not concluded:** whether the same 409 happens when adding B to the **workspace** (as a normal member rather than a board guest). §11's workspace e-mail invite also failed silently, but its requests were not recorded. Per the owner's instruction, no further attempts were made.
