@@ -1,0 +1,35 @@
+# Containers for the Codespace / dev container. Not used by the production docker-compose.yml.
+services:
+  workspace:
+    image: mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm
+    command: sleep infinity
+    volumes:
+      - ../..:/workspaces:cached
+      # Uploaded files and the Flowdeck log survive codespace stops and container rebuilds.
+      - flowdeck-data:/home/node/flowdeck-data
+    environment:
+      # Development-only database credentials. The database is reachable only inside this
+      # codespace's private container network (no ports are published or forwarded).
+      DATABASE_URL: postgres://flowdeck:flowdeck@db:5432/flowdeck
+      TEST_DATABASE_URL: postgres://flowdeck:flowdeck@db:5432/postgres
+      FLOWDECK_DATA_DIR: /home/node/flowdeck-data
+      FLOWDECK_WEB_DIR: dist/web
+      # The only way in is GitHub's private port forwarder, so its X-Forwarded-* headers are trusted.
+      FLOWDECK_TRUST_PROXY: "true"
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: flowdeck
+      POSTGRES_PASSWORD: flowdeck
+      POSTGRES_DB: flowdeck
+    volumes:
+      # Database files survive codespace stops and container rebuilds (deleted only with the codespace).
+      - flowdeck-db:/var/lib/postgresql/data
+
+volumes:
+  flowdeck-db:
+  flowdeck-data:

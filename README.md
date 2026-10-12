@@ -74,8 +74,60 @@ More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), including the stack choice
 | `tests/e2e` | Playwright browser tests (desktop, phone, tablet touch, accessibility) |
 | `scripts/` | `backup.sh`, `restore.sh`, `compose-smoke.mjs` (deployment test), `dev-setup.sh` |
 | `deploy/Caddyfile` | Optional HTTPS reverse proxy |
+| `.devcontainer/` | GitHub Codespaces / dev container setup (browser-only development preview) |
 | `docs/` | Architecture, operations, implementation checklist, handoff, screenshots |
 | `research/` | **Reference material**, not product documentation: the product research and specification Flowdeck was built from |
+
+## Try Flowdeck in your browser (GitHub Codespaces)
+
+You can try Flowdeck without installing anything: GitHub Codespaces runs it in a private cloud machine and gives you a private browser address for it. You only need a GitHub account with access to this repository.
+
+> **This is a development preview, not a deployment.**
+> - Only you can open it: the port is private and requires your GitHub sign-in, so teammates cannot join it.
+> - The database uses fixed development credentials inside the codespace's private network.
+> - To run Flowdeck for a team, use [Run Flowdeck on your server](#run-flowdeck-on-your-server).
+>
+> **Costs:** GitHub bills Codespaces usage (machine time and storage) to your GitHub account, **separately from any Claude or Anthropic credits**. Personal accounts include a monthly free allowance. Check your usage and spending limit at <https://github.com/settings/billing>, and stop the codespace when you're done.
+
+1. **Open the repository and select the implementation branch.**
+   - Go to <https://github.com/utkarshraj2004/Flowdeck>.
+   - Click the branch button above the file list (it shows **main**).
+   - Type `hopeful` and choose **`claude/hopeful-galileo-us9nkk`**.
+
+   (Direct link: <https://github.com/utkarshraj2004/Flowdeck/tree/claude/hopeful-galileo-us9nkk>.) Once the implementation is merged into `main`, skip this step.
+2. **Create a Codespace from that branch.**
+   - Click the green **<> Code** button → **Codespaces** tab → **Create codespace on claude/hopeful-galileo-us9nkk**.
+   - The 2-core machine is enough. To choose it, use **…** → **New with options…**.
+3. **Wait for setup.**
+   - An editor opens in your browser. On the first start, a terminal shows the setup: dependencies, build, database migrations. This takes a few minutes.
+   - It ends with `Flowdeck is starting in the background at https://<your-codespace>-8080.app.github.dev`.
+   - To check later, open a terminal (**☰ menu → Terminal → New Terminal**) and run `bash .devcontainer/status.sh`.
+   - If it says Flowdeck isn't running, run `bash .devcontainer/start.sh`.
+4. **Open the private forwarded port.**
+   - In the bottom panel, open the **Ports** tab.
+   - In the **Flowdeck (8080)** row, **Visibility** should say **Private**. Don't change it to Public.
+   - Hover over the **Forwarded Address** and click the globe icon (**Open in Browser**). A new browser tab opens at `https://<your-codespace>-8080.app.github.dev`.
+5. **Create your administrator account and try Flowdeck.** In the terminal, run:
+
+   ```bash
+   bash .devcontainer/create-admin.sh you@example.com
+   ```
+
+   - Open the printed one-time link: Ctrl/⌘-click it, or copy it into the Flowdeck tab. It is valid for 24 hours and uses your codespace's private address.
+   - Choose your name, username and a password of at least 12 characters. You are now the administrator, with a first workspace.
+   - Create a board, add lists and cards, drag them around, and open a card.
+   - To see live updates, open the same board in a second browser tab.
+6. **Stop and restart the Codespace.**
+   - **Stop:** go to <https://github.com/codespaces>, click **…** next to your codespace → **Stop codespace**. Codespaces also stop by themselves after a period of inactivity (30 minutes by default).
+   - **Restart:** on the same page, click the codespace's name, or **…** → **Open in browser**. Flowdeck starts again automatically, and your boards, cards and uploaded files are still there.
+   - Open the app again from the **Ports** tab (step 4). If you are logged out, log in with the username and password you chose.
+   - **Delete** the codespace (**…** → **Delete**) only when you no longer need its data: deleting removes everything in it. GitHub also deletes codespaces that stay stopped for a long time (30 days by default).
+
+Handy commands in the codespace terminal:
+- `bash .devcontainer/status.sh`: is Flowdeck running, and what address to open.
+- `bash .devcontainer/stop.sh` / `bash .devcontainer/start.sh`: stop or start the app.
+- `bash .devcontainer/setup.sh`: re-install and re-build after pulling new commits; your data is kept.
+- `cat ~/flowdeck-data/flowdeck.log`: the server log.
 
 ## Requirements
 
@@ -157,7 +209,7 @@ This repository is set up for [Claude Code](https://claude.ai/code) cloud sessio
 | `npm run check` | Everything above, in order: run before every commit |
 | `npm run cli -- admin create --email you@example.com` | Create an admin in the development database |
 
-The development server runs inside the cloud container and **cannot be opened from your own browser**: Claude Code cloud sessions have no port forwarding or web preview. Ask Claude for screenshots or test results, and to try Flowdeck yourself, run it on your own computer or server with Docker Compose ([Run Flowdeck on your server](#run-flowdeck-on-your-server)). A cloud session is not a place to host Flowdeck for your team.
+The development server runs inside the cloud container and **cannot be opened from your own browser**: Claude Code cloud sessions have no port forwarding or web preview. Ask Claude for screenshots or test results. To try Flowdeck yourself without installing anything, use [GitHub Codespaces](#try-flowdeck-in-your-browser-github-codespaces), or run it on your own computer or server with Docker Compose ([Run Flowdeck on your server](#run-flowdeck-on-your-server)). A cloud session is not a place to host Flowdeck for your team.
 
 More in [CONTRIBUTING.md](CONTRIBUTING.md) and [CLAUDE.md](CLAUDE.md).
 
@@ -165,7 +217,7 @@ More in [CONTRIBUTING.md](CONTRIBUTING.md) and [CLAUDE.md](CLAUDE.md).
 
 | Suite | Count | Covers |
 |---|---|---|
-| Unit (`tests/unit`) | 18 | Permission matrix, search parser, board filter, due-date states, log redaction |
+| Unit (`tests/unit`) | 21 | Permission matrix, search parser, board filter, due-date states, log redaction, WebSocket origin check |
 | API + realtime (`tests/api`) | 46 | Two-user authorization and workspace isolation (every denied write is read back unchanged), last-admin rules, invitations, CSRF, login rate limit, ordering (including a 150-move model check and restart persistence), live delivery, reconnect replay, access revocation, conflicts, uploads (limits, headers, permissions, cleanup), notifications, search, cross-board moves, export, migrations |
 | Browser (`tests/e2e`) | 16 | First-admin setup → invite → two users live; mouse, touch and keyboard moves; dialog focus (including while a card loads); edit conflicts; unsaved changes; offline → reconnect; observer/outsider/removal; uploads; filter and search; axe accessibility scan of 7 screens; phone layout |
 | Deployment (`scripts/compose-smoke.mjs`) | 1 | Docker build → first admin → data → container restart → backup → wipe volumes → restore → identical export and file bytes |

@@ -22,7 +22,7 @@
   - shortcut set;
   - the HTTPS profile, which has not been exercised.
 - **Tests:**
-  - 18 unit + 46 API/realtime tests (Vitest) pass;
+  - 21 unit + 46 API/realtime tests (Vitest) pass;
   - 16 Playwright browser tests (desktop, phone, tablet touch, axe) pass;
   - the Docker Compose smoke test passes (build, restart, backup, wipe, restore, identical export and file bytes).
   - All pass locally in Claude Code Cloud and in GitHub Actions on PR #4. The first CI run caught one intermittent focus bug in the card dialog; it is fixed, and a regression test was added.
@@ -39,6 +39,21 @@
   - composer race on Esc;
   - focus escaping the card dialog while it loads;
   - tokens in request logs.
+
+## GitHub Codespaces (browser-only preview, added in session 2)
+
+- `.devcontainer/`: a `workspace` container (Node 22, the official `typescript-node` dev image) plus a `db` container (PostgreSQL 16).
+- **Persistence:** named volumes `flowdeck-db` and `flowdeck-data` (uploads and log) survive stop/start and rebuilds.
+- **Lifecycle:**
+  - `postCreateCommand` runs `setup.sh` (npm ci, build, migrate);
+  - `postStartCommand` runs `start.sh` (background start, returns immediately, stale-PID safe).
+- **Address:** the app's public URL is computed from `CODESPACE_NAME` + `GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN`, so one origin serves the web app, API and WebSocket on private port 8080. `FLOWDECK_TRUST_PROXY=true` only in the codespace.
+- **Tested here** with the Dev Containers CLI 0.89 and simulated Codespaces variables:
+  - create, stop/start and rebuild, with data and an uploaded file preserved;
+  - setup link on the Codespaces address;
+  - Secure cookie, auth and CSRF;
+  - WebSocket allowed from the Codespaces origin and refused from foreign origins and without a session.
+- **Not tested:** a real codespace behind GitHub's forwarder. Ask the owner how the first launch went.
 
 ## Decisions made (and why)
 

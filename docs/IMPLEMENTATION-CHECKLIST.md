@@ -111,6 +111,7 @@ Status of Flowdeck 0.1.0 against the first-version scope and the research covera
 | Feature | Status | Notes |
 |---|---|---|
 | Docker Compose (app + PostgreSQL), persistent volumes, healthchecks [60] | ✅ | `scripts/compose-smoke.mjs` |
+| GitHub Codespaces development preview (`.devcontainer/`) | 🟡 | Dev-container lifecycle, persistence across stop/start/rebuild, Codespaces origin, cookies and WebSocket tested with the Dev Containers CLI and simulated Codespaces variables; the first real Codespace launch (GitHub's port forwarder) is untested |
 | Optional HTTPS (Caddy profile) | 🟡 | Configuration provided; not exercised in automated tests (needs a real domain) |
 | Automatic forward-only migrations, advisory lock, downgrade refusal (J17.3) | ✅ | |
 | Backup and restore scripts with checksums and manifest (J17.2) | ✅ | Wipe-and-restore verified by the smoke test |

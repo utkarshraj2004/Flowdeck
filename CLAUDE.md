@@ -20,6 +20,7 @@ Self-hosted team work management (workspaces → boards → lists → cards) wit
 - Dev: `npm run dev` (API :8080, web :5173). First admin: `npm run cli -- admin create --email you@example.com`. Cloud sessions have no port forwarding/web preview: the owner cannot open these ports. Show results with screenshots; the owner runs Flowdeck locally with Docker Compose.
 - `npm run typecheck` · `npm test` · `npm run build` · `npm run test:e2e` (after `npm run build:web`).
 - **`npm run check` before every commit.**
+- Codespaces preview: `.devcontainer/` (setup/start/stop/status/create-admin scripts). Test locally with the Dev Containers CLI (`npx @devcontainers/cli up --workspace-folder <fresh clone>`); in this sandbox pass `--remote-env NODE_EXTRA_CA_CERTS=…` with a git-excluded copy of the proxy CA, and never commit it.
 - Deployment drill: `EXTRA_CA_CERT=/root/.ccr/ca-bundle.crt node scripts/compose-smoke.mjs`. In Claude Code Cloud: start `dockerd` first. Docker Hub is rate-limited there, so `docker pull mirror.gcr.io/library/{postgres:16-alpine,node:22-bookworm-slim}` and `docker tag` them to the plain names.
 - Browser tests use `CHROMIUM_PATH` or `/opt/pw-browsers/chromium` (the installed Playwright version expects a different Chromium build; do not run `playwright install` here).
 

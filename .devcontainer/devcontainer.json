@@ -1,0 +1,28 @@
+// GitHub Codespaces / Dev Containers setup for trying and developing Flowdeck in the browser.
+// This is a DEVELOPMENT PREVIEW, not a production deployment (see README → "Try Flowdeck in your browser").
+{
+  "name": "Flowdeck (development preview)",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "workspace",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "shutdownAction": "stopCompose",
+  "remoteUser": "node",
+
+  // One origin for the web app, the API and the WebSocket: everything is served by Flowdeck on port 8080.
+  // Codespaces forwards ports privately by default (only you, signed in to GitHub, can open them).
+  "forwardPorts": [8080],
+  "portsAttributes": {
+    "8080": { "label": "Flowdeck", "onAutoForward": "notify" }
+  },
+  "otherPortsAttributes": { "onAutoForward": "silent" },
+
+  // Runs once when the codespace is created: install dependencies, build, run migrations.
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  // Runs on every start (including after a stop/restart): starts Flowdeck in the background, never blocking.
+  "postStartCommand": "bash .devcontainer/start.sh",
+
+  "hostRequirements": { "cpus": 2, "memory": "4gb" },
+  "customizations": {
+    "codespaces": { "openFiles": ["README.md"] }
+  }
+}
