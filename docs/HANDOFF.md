@@ -7,7 +7,7 @@
 | Item | Value |
 |---|---|
 | Implementation branch | `claude/hopeful-galileo-us9nkk` (`git log -1` shows the head) |
-| Implementation PR | see the PR list (base: `claude/trello-investigation-resume-kxgrvd`), linked in the session summary and the CHANGELOG |
+| Implementation PR | https://github.com/utkarshraj2004/Flowdeck/pull/4 (draft; base `claude/trello-investigation-resume-kxgrvd`) |
 | Based on | Research branch `claude/trello-investigation-resume-kxgrvd` at `6f5f60e` (PR #3), which is based on PR #2's branch `claude/great-ride-udwvvd` |
 | Research PRs | #3 and #2 are **open and unmerged** (draft). Do not merge them without the owner's approval |
 | Merge order, when approved | PR #3 → `claude/great-ride-udwvvd`, PR #2 → `main`, then retarget the implementation PR to `main` (its diff will then show only the application) |
