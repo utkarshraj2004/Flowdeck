@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useLayer } from './Popover';
+import { X } from './icons';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -25,6 +27,7 @@ export function Modal({
   const ref = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  const isTop = useLayer();
   // React keydown (not a native listener) so inner editors can stopPropagation() on Esc first.
   const keyRef = useRef<((e: KeyboardEvent) => void) | null>(null);
 
@@ -75,7 +78,7 @@ export function Modal({
   }, []);
 
   return createPortal(
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && closeRef.current()}>
+    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && isTop() && closeRef.current()}>
       <div
         ref={ref}
         className={`modal ${className}`}
@@ -93,7 +96,7 @@ export function Modal({
           <div className="modal-head">
             <h2>{title}</h2>
             <button className="icon-btn" aria-label="Close" onClick={() => closeRef.current()}>
-              ×
+              <X size={18} />
             </button>
           </div>
         )}

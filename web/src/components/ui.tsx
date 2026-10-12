@@ -46,7 +46,19 @@ export function EmptyState({ title, children }: { title: string; children?: Reac
   );
 }
 
-export const LABEL_COLORS = ['green', 'yellow', 'orange', 'red', 'purple', 'blue', 'sky', 'lime', 'pink', 'black'] as const;
+export const LABEL_HUES = ['green', 'yellow', 'orange', 'red', 'purple', 'blue', 'sky', 'lime', 'pink', 'black'] as const;
+/**
+ * 30 label colours in palette-grid order for a 5-column grid: for each group of five hues, a row of
+ * subtle shades, a row of normal shades and a row of bold shades.
+ */
+export const LABEL_COLORS = [LABEL_HUES.slice(0, 5), LABEL_HUES.slice(5)].flatMap((g) => [...g.map((h) => `${h}_subtle`), ...g, ...g.map((h) => `${h}_bold`)]);
+const HUE_NAMES: Record<string, string> = { black: 'grey' };
+/** Accessible colour name, e.g. "bold red", "subtle grey". */
+export function colorName(c: string | null) {
+  if (!c) return 'no colour';
+  const [hue, shade] = c.split('_');
+  return `${shade ? `${shade} ` : ''}${HUE_NAMES[hue] ?? hue}`;
+}
 export const BACKGROUNDS = ['ocean', 'forest', 'sunset', 'berry', 'slate', 'sand', 'teal', 'plum'] as const;
 
 export function LabelChip({ label, showName = true }: { label: { name: string; color: string | null }; showName?: boolean }) {
