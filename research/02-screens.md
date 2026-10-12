@@ -91,3 +91,26 @@ Source: [E-session2-auth](evidence/E-session2-auth.md). Flowdeck copies **struct
 | Search | `/` focuses header search; live dropdown (cards, boards); Advanced search page with filters and saved searches | MVP: header search + results page; saved searches later |
 | Filter | Keyword/members/labels/due/activity; header shows match count and "Clear all"; `x` clears; state in URL and per-user local storage | Same; state in URL query |
 | Mobile | Compact header; lists stay 272 px with the next one peeking; icon-only bottom bar | Same widths; no app-promo interstitial |
+
+## Observed in session 5 (OBS O06, two users)
+
+Source: [E-session5](evidence/E-session5.md). Screens in `evidence/screens/auth-s5-*`.
+
+| Screen / state | Trello (observed) | Flowdeck decision |
+|---|---|---|
+| S10 card back, **someone else editing** | Description heading shows the other user's avatar with a pencil icon; the local editor keeps its draft with an **"Unsaved changes"** badge and **Discard changes** ([t3-3](evidence/screens/auth-s5-t3-3-draft-vs-saved.png)) | Show "<name> is editing" presence on the description, and on save conflict show the 3-way prompt (07). **Never silently overwrite** another user's newer text |
+| S10 card archived **while editing** | Archived banner at the top; editor stays open with the draft | Same, plus "Copy your draft" so it is not lost |
+| S10 card deleted **while editing** | View becomes "Card not found."; draft lost ([t3-5](evidence/screens/auth-s5-t3-5-deleted-while-editing.png)) | Keep the modal with a "This card was deleted" banner and a **Copy draft** button (better than parity) |
+| S06 board after **access removed** | Live switch to "This board is private · Send request" ~5 s later ([t5-7](evidence/screens/auth-s5-t5-7-removed-live.png)) | Live switch within 2 s to Flowdeck's no-access page (J11.4) |
+| S06 board with **role changed** | Admin-only menu items appear/disappear live (<1 s) | Same: permissions in the client follow `board.member_role_changed` events |
+| S06 adminless board | Members see **Join board**; nobody can become admin ([t5-3](evidence/screens/auth-s5-t5-3-adminless-board.png)) | Unreachable in Flowdeck (last admin cannot leave, 04 invariant 1) |
+| S14 share dialog | Email/name field, role select, Share; "Share this board with a link · Create link"; tabs **Board members (n)** / **Join requests**; per-member role menu Admin / Member / Observer (paid) / Remove from board ([t5-1](evidence/screens/auth-s5-t5-1-board-role-menu.png)) | Same structure; Observer is a normal role in Flowdeck |
+| S15 workspace members | "Collaborators n / 10"; tabs Members / Single-board guests / Multi-board guests / Join requests; Invite Workspace members dialog (email/name + Create link); per-row Boards (n), role, Remove/Leave ([m5](evidence/screens/auth-s5-m5-reverse-invite-after.png)) | Same tabs (guests, pending invites, join requests); no plan cap |
+| S15 remove member | Two-choice popover: **Remove from Workspace** (keeps board memberships, user becomes a guest) or **Remove from Workspace and Boards** ([t5-5](evidence/screens/auth-s5-t5-5-ws-remove-dialog.png)) | Same two choices |
+| S18 notifications drawer | "Only show unread" toggle, Mark all as read, grouped per card, newest first, each with actor and relative time ([t8-2](evidence/screens/auth-s5-t8-2-drawer.png)) | Same grouping |
+| Mention autocomplete | Typing `@` + letters lists matching **board members** only ([t8-1](evidence/screens/auth-s5-t8-1-mention-autocomplete.png)) | Same; non-members never suggested |
+| S12 board menu panels | Print/export/share (link, Print, Export JSON, QR; CSV paid), Email-to-board, Stickers, Change background (photos, colours, upload), Activity (All / Comments), Copy board (Keep cards / Keep template cards) | MVP: export JSON, activity, copy board, background colours. Later: print view, email-to-board |
+| S08 list menu | Add card, Copy list, Move list, Move all cards, Sort by, Watch, list colour (paid), automation shortcuts, Archive list, Archive all cards ([i06](evidence/screens/auth-s5-i06-list-menu.png)) | MVP items as in J06; Sort by: Later |
+| S21 closed boards | Board page shows **Reopen board** only; **Delete lives in the Closed boards dialog** with a one-step "Delete board? … There is no undo." ([i07](evidence/screens/auth-s5-i07-delete-closed-board.png)) | Keep J13.3 (typed board name) — stricter on purpose |
+| Dates popover | Calendar, start (optional), due date + time, **Recurring** (Never), **reminder** (1 Day before) with "Reminders will be sent to all members and watchers of this card." ([i05](evidence/screens/auth-s5-i05-dates-recurring.png)) | Same fields; recurring and reminders Later |
+| Offline (two users) | Toast stays until closed even after reconnect; missed changes appear ~2.75 s after reconnect ([t4-2](evidence/screens/auth-s5-t4-2-after-reconnect.png)) | Auto-hide the offline toast on reconnect and show "Back online" |

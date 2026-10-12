@@ -50,3 +50,9 @@ The current repo deploys a **static** site to GitHub Pages. A multi-user Flowdec
 ## Security baseline
 
 argon2id passwords; session rotation on login; CSRF protection; rate limits on auth; CSP `default-src 'self'`; Markdown rendered with a sanitiser (no raw HTML); uploads never executed or served inline as HTML/SVG; audit log for admin actions; dependency and container image scanning in CI.
+
+## Inputs from the Trello observations (session 5)
+
+- **No plan gating.** Roles, views and exports that Trello puts behind a paid plan (observer, normal workspace role, CSV, list colours, custom fields) are ordinary features or later features in Flowdeck. Operators configure limits only (07).
+- **Real-time sizing.** Trello delivers cross-user changes in 0.4–0.7 s and catches up 2.75 s after a reconnect ([E-session5 §4](evidence/E-session5.md#4--t4-two-way-real-time-reconnect-persistence-fd-collab-board)). Flowdeck's single node meets its 500 ms / 2 s targets with in-process pub/sub. No broker is needed below the 50-user target (Q2).
+- **Exports as a restore check.** Trello's board JSON export (board fields plus `actions`, `cards`, `checklists`, `labels`, `lists`, `members`, `memberships`…) is free and complete enough to import later (Q6). Flowdeck's own per-board export is used in the restore drill (O2): export before backup, restore, export again, compare.

@@ -16,7 +16,8 @@ Gherkin shorthand: **G** given, **W** when, **T** then.
 2. W B opens the link while logged out, T they can create an account; after submit they are a workspace **member**.
 3. W an admin creates an invite link, T anyone with the link joins as member until it is revoked; after revocation, opening it shows "This invite is no longer valid".
 4. G a workspace member without invite rights, T the invite button is absent and `POST /workspaces/:id/invites` returns 403.
-5. W an admin demotes the last admin, T the server returns `409 last_admin` and the UI explains it.
+5. W an admin demotes **or removes** the last admin, **or the last admin tries to leave**, T the server returns `409 last_admin` and the UI explains it. (Trello blocks the demote but **allows the leave**, leaving the board with no admin: OBS O06 §5.)
+6. W a workspace admin removes a member, T they choose "remove from workspace" (the user keeps their boards and becomes a guest) or "remove from workspace and boards". The user is notified either way (OBS O06 §5).
 
 ## J03 · Log in / log out / reset password  (Ref: INF; D19 SSO later)
 1. Wrong password → generic "Email or password is incorrect" (no account enumeration). The 6th failure within 1 min returns 429.
@@ -80,7 +81,8 @@ Gherkin shorthand: **G** given, **W** when, **T** then.
 1. Two browsers on the same board: any create/move/edit/archive in A appears in B within 1 s (p95) without reload.
 2. Kill B's network for 30 s while A makes 10 changes; on reconnect B shows all 10 with no duplicates (catch-up by `seq`).
 3. Exceeding the replay window triggers a full snapshot reload, keeping the scroll position.
-4. Removing B from a private board makes B's view switch to "You no longer have access" within 2 s.
+4. Removing B from a private board makes B's view switch to "You no longer have access" within 2 s (Trello: ~4.9 s, OBS O06 §6). If B can still see the board through the workspace, B's view stays readable and only the edit affordances their new role lacks disappear.
+5. Changing B's role while B has the board open updates B's affordances without reload within 1 s (Trello: 0.66–0.96 s for admin-only menu items, OBS O06 §6).
 
 ## J12 · Permissions in practice  (Ref: 04)
 1. An observer sees the board, can comment if the pref allows, and cannot drag cards (drag handles absent; API 403).
@@ -140,3 +142,25 @@ These refine the acceptance criteria above. Source: [E-session2-auth](evidence/E
 | J10 | Default email frequency **Periodically (hourly)**. Watcher gets notified of another user's comment, due change, attachment, complete and move; notifications grouped per card in the drawer; red bell count on the card front; no self-notifications; non-members are not notified by @mentions | Same rules; group by card in the drawer; card-front unread badge |
 | J11 | Cross-user fan-out 0.38–0.91 s (median ≈ 0.44 s); open dialogs update live on archive/delete by another user | p95 < 1 s on LAN; open-card conflict states as in 02 |
 | J12 | Non-member opening a workspace board gets "private · Send request"; request appears as a notification for admins with a one-click approve. Public viewers: read-only UI **and** server-side 401 on writes | Same flow (Later); approval must actually add the member and show an error if it can't; every write checked server-side |
+
+## Acceptance updates from two-user observation (OBS O06, session 5)
+
+Source: [E-session5](evidence/E-session5.md). "Trello" is what was observed. "Flowdeck AC" is the testable rule. Where they differ, Flowdeck is deliberately stricter or clearer.
+
+| Area | Trello (observed) | Flowdeck AC |
+|---|---|---|
+| **Denied writes** | Many forbidden writes return **200 and silently do nothing**: a member changing visibility, background, commenting, self-join or invitation prefs; a checklist-item assignment on the free plan | **J12.4** Every write the actor may not perform returns **403 `forbidden`** (or 404 when the board is invisible to them). The UI shows why. The state is unchanged (test reads it back). **No silent success, ever.** |
+| Admin-only board actions | Rename and close: 401. Self-promotion: 401. Demoting the sole admin: 403 | **J12.5** Same outcomes, with Flowdeck codes: `forbidden` 403; `last_admin` 409 |
+| Comments | Authors edit their own; nobody edits others' (admins included: 401); admins delete others' comments; members cannot | **J08.6** unchanged, plus: an edit of someone else's comment returns 403 for every role |
+| Member deletes | A member can archive others' cards, delete others' archived cards, archive lists and create labels | **J12.6** Default: same, behind the Q8 setting "members can delete archived items" (default on) |
+| **Title edits** | The title saves on blur (and Enter); concurrent saves: last write wins; the other user's open dialog updates live | **J07.9** The title saves on Enter or blur; Esc cancels. Concurrent title saves use `If-Match`. The second writer gets a "changed by <name>" notice showing both values and chooses which to keep |
+| **Description drafts** | Another user's save never replaces a local draft. The draft shows "Unsaved changes" and the other user's editing avatar. **No warning** that the saved text changed; last save wins silently | **J08.10** The draft is preserved. When someone else saves while you edit, a notice appears at once ("<name> updated the description"). On save, a 409 triggers the 3-way prompt (07). Presence shows who is editing |
+| Concurrent move | Both moves succeed; both clients converge on the last one | **J07.10** Same (moves are not version-gated); both clients show the same final list and position within 1 s |
+| Card archived or deleted while editing | Archived: banner, the draft stays. Deleted: "Card not found", **the draft is lost** | **J08.11** Archived: banner + draft kept + Restore (if allowed). Deleted: banner "deleted by <name>" + **Copy draft**; the modal stays until closed |
+| Real-time | B→A median 504 ms, A→B 443 ms (≤ 702 ms) | **J11.1** unchanged (p95 < 1 s on LAN; target 500 ms) |
+| Reconnect | Missed changes appear ~2.75 s after the network returns; the offline toast stays until closed | **J11.2** After reconnect, all missed events are applied within 2 s, without duplicates; the offline notice is replaced by "Back online" |
+| Notifications | @mention → mentioned; added to card / removed from card; due change, comment, attachment and completion on a card you are a member of; a new card in a watched list. **A list rename on a watched board does not notify.** The bell updates live (~0.6 s) | **J10.5** Same trigger set (table in 04/06). A board watcher is notified of new cards and lists, not renames. The bell count updates within 1 s |
+| Mention autocomplete | Suggests board members only | **J08.6a** `@` suggests board members (Later: also workspace members on workspace-visible boards); non-members are never suggested or notified |
+| Guests | A guest edits the boards they belong to, cannot rename a board, cannot see other workspace boards ("This board is private"), and counts toward the collaborator cap | **J12.2** unchanged; Flowdeck has no cap |
+| Board delete | Delete is only in the Closed boards list; one-step confirmation | **J13.3** unchanged (typed board name; admin only) |
+| Workspace invite failure | One invitation returned 200 with a "Member was invited" toast, but created nothing | **J02.7** An invite either creates a pending invitation, visible in the workspace's Pending tab, or returns an error. Tests read the invitation back. |

@@ -18,7 +18,20 @@
 
 | Card archived / deleted by another user while open: the open dialog updates live (archived banner) or is replaced by "Card not found". Matches Flowdeck's conflict-state rule. | OBS O05 §14 (cross-user) |
 
-**Still not observed:** renumbering when positions get very close, and edit conflicts between two *different* users (B could only view; writes returned 401). See [E-session2-auth](evidence/E-session2-auth.md).
+**Two different users, both editing (OBS O06, [E-session5 §3–4](evidence/E-session5.md#3--t3-conflicting-edits-by-different-users-fd-collab-board)):**
+
+| Case | Trello outcome |
+|---|---|
+| Both save the **title** | Last write wins. The other user's open dialog updates live. No warning. Titles save on blur. |
+| Both save the **description** | Last write wins. A local draft is never replaced by the other user's save. No warning. |
+| One saves while the other drafts | The draft is kept, marked "Unsaved changes", with the other editor's avatar shown. No notice that the saved text changed. |
+| Both **move** the same card | Both 200; both clients converge on the last move. |
+| Card **archived** while the other user types | Archived banner; the draft stays. |
+| Card **deleted** while the other user types | "Card not found"; the draft is lost. |
+| One client **offline** while the other makes 3 changes | No offline queue. On reconnect, all 3 changes appear after 2.75 s, without reload or duplicates. |
+| **Reload** | Identical state for both users. |
+
+**Still not observed:** renumbering when positions get very close, and Trello's server-side replay mechanism (its frames carry a per-channel index; how a reconnecting client uses it was not seen).
 
 ## Flowdeck decisions (INF)
 
@@ -34,7 +47,8 @@
 |---|---|
 | Two users move the same card | Last write wins on `list_id`/`position`. Both see the final state via `seq`-ordered events. No 409 for moves (moves are not `If-Match` gated). |
 | Two users edit the same scalar field (name, due) | `If-Match` version check → 409 with current value. The client shows "Updated by X — reload / overwrite". |
-| Description editing | Per-field version. When a 409 arrives while editing, the client shows a 3-way diff (base / theirs / mine) and lets the user pick. Later: CRDT (Yjs) collaborative editing. |
+| Title editing | Saves on Enter or blur. `If-Match`. On 409 the client shows "changed by <name>" with both values. (Trello: silent last write wins, OBS O06.) |
+| Description editing | Per-field version. While someone else edits, show their presence; when their save lands, show "<name> updated the description" at once (Trello shows nothing). When a 409 arrives while editing, the client shows a 3-way diff (base / theirs / mine) and lets the user pick. Later: CRDT (Yjs) collaborative editing. |
 | Checklist toggles, label/member add-remove | Set semantics (idempotent add/remove), no conflict. |
 | Card archived/deleted while another user has it open | Event updates the open modal (02 Conflict state); further edits get `404` or `409 archived`. |
 | List archived while someone adds a card to it | Reject with `409 list_archived`. |
@@ -59,3 +73,12 @@
 | Deletion | Remove attachment row → decrement `ref_count` → a GC job deletes the blob when the count is 0 and the blob is older than 24 h (so backups taken in that window stay consistent). |
 | Quotas | Per-instance storage usage shown in admin, optional per-workspace quota. |
 | Access (Trello, DOC-direct D30) | Since 2023-12-01 Trello attachment URLs require board access (public boards excepted); deleting a card deletes its files; uploaded images automatically become the cover. Flowdeck already serves files only through authenticated, permission-checked routes (INF). |
+
+### Why Flowdeck differs from Trello here (deliberate)
+
+Trello's observed rule is per-field last write wins, with **no notice**, plus draft preservation. That loses work silently when two people edit the same description: the first saver's text is overwritten without either user being told. Flowdeck keeps Trello's good parts (drafts never overwritten, live updates of read-only views, moves converge without prompts) and adds three things:
+1. a version check on title, description and due date;
+2. an immediate notice when someone else saves the field you are editing;
+3. the 3-way prompt on conflict.
+
+Cost: one extra column per row and a small client merge dialog. See J07.9, J08.10, J08.11.

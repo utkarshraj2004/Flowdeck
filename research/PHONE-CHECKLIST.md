@@ -1,6 +1,6 @@
 # Manual real-phone checklist (gap 4: touch drag)
 
-For the owner, about 15 minutes. Headless emulation cannot start native touch drags, so these need a real phone. Use **Account 1** on **FD Parity Board** only, and only the synthetic cards (`RT probe 1–5`, `XU probe 1–3`). Results feed T2 / J15 in `09-test-plan.md`.
+For the owner, about 15 minutes. Headless emulation cannot start native touch drags, so these need a real phone. Use **Account 1** on **FD Parity Board** only, and only the synthetic cards (`RT probe 1–5`, the `XU probe` cards). The board is currently **Public** (synthetic content only). Results feed T2 / J15 in `09-test-plan.md`.
 
 **Setup:** phone browser (not the Trello app, unless noted), logged in as Account 1. Note the phone model, OS version and browser.
 

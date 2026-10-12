@@ -270,6 +270,8 @@ Plus routine GraphQL reads, `markAsViewed` and a session heartbeat (all 200). Br
 
 ### Finding
 
+> *Corrected 2026-10-12 (session 5, [E-session5 §2](E-session5.md#2--membership-blocker-resolved-by-route-2)):* the 409 below is **not** the cause. A recorded workspace invite made no billing call and still failed. In a fresh workspace created by B, the same 409 occurred and the add **succeeded**. The text below is kept as recorded at the time.
+
 The client first asks Trello's billing service whether adding B is free (B is not a workspace member, so on this board B would be a **guest**). That call fails with **409 "managed by the commerce platform … cannot be modified by this billing API"**: the workspace's billing is held by Atlassian's newer commerce platform, and Trello's legacy billing endpoint refuses to evaluate it. The following add-member call returns 200 but **does not create the membership**, and the UI shows nothing. This matches §11's "200 but no membership" and is the first recorded server-side reason.
 
 What this rules out (from evidence, not assumption): free-plan seat limits (1/10 used), workspace guest restrictions (`externalMembersDisabled: false`), invitation restrictions (`boardInviteRestrict: any`), unconfirmed or blocked accounts. It does **not** show that the email provider is involved: B's account was found by email and resolved to the correct member.

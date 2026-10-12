@@ -53,6 +53,7 @@ Collected 2026-10-11. **DOC** sources were read through web-search summaries tha
 | O03 | Live logged-out observation of trello.com and the public board `/b/nC8QJJoZ` with Chromium + REA 6.4.0. [E-trello-public.md](E-trello-public.md) |
 | O05 | Session 2, **authenticated** with the two test accounts: synthetic workspace/board; boards, lists, cards, card back, labels, dates, checklists, comments, attachments, archive/restore/delete, drag-and-drop, search, filter, same-user real-time and concurrency, offline, not-found, sharing/invitation attempts, settings, mobile. [E-session2-auth.md](E-session2-auth.md) |
 | O04 | Session 2: login attempt (stopped at Atlassian email verification), `trello.com/shortcuts`, logged-out loading/offline/not-found states, WebSocket reconnect timeline, REA 6.4.0 reinstall. [E-session2.md](E-session2.md) |
+| O06 | Session 5, authenticated, two users: recorded workspace invite (route 1, failed), workspace created by Account 2 (route 2, succeeded), two-user conflicts (T3), two-way real-time and reconnect (T4), member/admin/guest permissions with read-back (T5), live role changes, member notifications (T8), paid/free inventory sweep, axe audit. Tool attribution per result (REA / Playwright / API read-back / axe). [E-session5.md](E-session5.md) |
 | O01 | Trello connector tool schemas and read-only responses (workspace list, board list metadata, member profile shape). [E-connector.md](E-connector.md) |
 
 ## Third-party (3P), used only to flag conflicts
