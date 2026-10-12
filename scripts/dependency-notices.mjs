@@ -10,7 +10,7 @@ const purpose = {
   '@fastify/rate-limit': 'Login rate limiting', '@fastify/static': 'Serving the web client', '@fastify/websocket': 'Real-time WebSocket',
   '@node-rs/argon2': 'Password hashing (argon2id)', 'fractional-indexing': 'Card and list ordering keys', pg: 'PostgreSQL client',
 };
-const bundled = ['react', 'react-dom', 'react-router-dom', '@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities', 'markdown-it'];
+const bundled = ['react', 'react-dom', 'react-router-dom', '@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities', 'markdown-it', 'lucide-react'];
 
 // Licenses across the whole installed tree.
 const counts = {};

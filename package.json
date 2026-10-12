@@ -48,6 +48,7 @@
     "@types/ws": "8.18.1",
     "@vitejs/plugin-react": "5.2.0",
     "concurrently": "9.2.5",
+    "lucide-react": "1.45.0",
     "markdown-it": "15.0.2",
     "playwright-core": "1.64.0",
     "react": "19.3.0",

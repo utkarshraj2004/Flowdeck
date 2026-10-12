@@ -5,6 +5,7 @@ import { conflict, invalid, notFound } from '../lib/errors.js';
 import { requireBoard } from '../lib/permissions.js';
 import { runMutation } from '../lib/mutation.js';
 import { cardFront, cardFronts, listJson } from '../lib/serialize.js';
+import { generateNKeysBetween } from 'fractional-indexing';
 import { keyFor, parsePlacement } from '../lib/positions.js';
 import { transferCardToBoard } from '../lib/transfer.js';
 import { fileKeys, removeFiles } from '../lib/files.js';
@@ -214,6 +215,31 @@ export async function listRoutes(app: FastifyInstance, ctx: Ctx) {
       return cards.length;
     });
     return { moved: data, event: events[0] };
+  });
+
+  // Sort the open cards of a list once (a one-time reorder, not a persistent sort mode).
+  app.post('/lists/:listId/sort', async (req) => {
+    const u = auth(req);
+    const list = await loadList((req.params as any).listId);
+    await requireBoard(db, u.id, list.board_id, 'edit');
+    const by = v.oneOf(v.body(req.body), 'by', ['name', 'due', 'newest', 'oldest'] as const)!;
+    const order = {
+      name: 'lower(name) COLLATE "C", name, id',
+      due: 'due_at ASC NULLS LAST, position, id',
+      newest: 'created_at DESC, number DESC',
+      oldest: 'created_at ASC, number ASC',
+    }[by];
+    const { data, events } = await runMutation(ctx, u.id, mutationId(req), async (m) => {
+      await m.lock(list.board_id);
+      const cards = await many(m.tx, `SELECT id FROM cards WHERE list_id = $1 AND archived_at IS NULL ORDER BY ${order}`, [list.id]);
+      const keys = cards.length ? generateNKeysBetween(null, null, cards.length) : [];
+      for (let i = 0; i < cards.length; i++) await m.tx.query('UPDATE cards SET position = $2, version = version + 1, updated_at = now() WHERE id = $1', [cards[i].id, keys[i]]);
+      const fronts = [];
+      for (const c of cards) fronts.push(await cardFront(m.tx, c.id));
+      await m.emit(list.board_id, 'list.cards_sorted', { listId: list.id, summary: { name: list.name, by, count: cards.length }, data: { listId: list.id, cards: fronts } });
+      return cards.length;
+    });
+    return { sorted: data, event: events[0] };
   });
 
   for (const method of ['put', 'delete'] as const) {

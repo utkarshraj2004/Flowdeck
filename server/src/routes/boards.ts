@@ -50,7 +50,7 @@ export async function boardRoutes(app: FastifyInstance, ctx: Ctx) {
       await m.watch(u.id, 'board', board.id);
       if (sourceBoardId) {
         const labelMap = new Map<string, string>();
-        for (const l of await many(tx, 'SELECT * FROM labels WHERE board_id = $1 ORDER BY created_at', [sourceBoardId])) {
+        for (const l of await many(tx, 'SELECT * FROM labels WHERE board_id = $1 ORDER BY position, id', [sourceBoardId])) {
           const nl = await one(tx, 'INSERT INTO labels (board_id, name, color) VALUES ($1,$2,$3) RETURNING id', [board.id, l.name, l.color]);
           labelMap.set(l.id, nl.id);
         }
@@ -96,7 +96,7 @@ export async function boardRoutes(app: FastifyInstance, ctx: Ctx) {
     const boardId = access.board.id;
     const [members, labels, lists, cards, ws, star, watch] = await Promise.all([
       boardMembers(db, boardId),
-      many(db, 'SELECT * FROM labels WHERE board_id = $1 ORDER BY created_at, id', [boardId]),
+      many(db, 'SELECT * FROM labels WHERE board_id = $1 ORDER BY position, id', [boardId]),
       many(db, 'SELECT * FROM lists WHERE board_id = $1 AND archived_at IS NULL ORDER BY position, id', [boardId]),
       cardFronts(db, 'c.board_id = $1 AND c.archived_at IS NULL AND c.list_id IN (SELECT id FROM lists WHERE board_id = $1 AND archived_at IS NULL)', [boardId]),
       one(db, 'SELECT id, name FROM workspaces WHERE id = $1', [access.board.workspace_id]),
@@ -106,6 +106,11 @@ export async function boardRoutes(app: FastifyInstance, ctx: Ctx) {
     // Re-read last_seq after the reads so the client never misses an event (it may get duplicates, which it ignores by seq).
     const fresh = await one(db, 'SELECT * FROM boards WHERE id = $1', [boardId]);
     const listWatches = await many(db, `SELECT target_id FROM subscriptions WHERE user_id = $1 AND target_type = 'list' AND target_id = ANY($2)`, [userId, lists.map((l) => l.id)]);
+    const cardWatches = await many(
+      db,
+      `SELECT s.target_id FROM subscriptions s JOIN cards c ON c.id = s.target_id WHERE s.user_id = $1 AND s.target_type = 'card' AND c.board_id = $2 AND c.archived_at IS NULL`,
+      [userId, boardId],
+    );
     return {
       board: { ...boardJson(fresh), starred: !!star, watching: !!watch },
       workspace: ws,
@@ -115,6 +120,7 @@ export async function boardRoutes(app: FastifyInstance, ctx: Ctx) {
       lists: lists.map(listJson),
       cards,
       watchedListIds: listWatches.map((r) => r.target_id),
+      watchedCardIds: cardWatches.map((r) => r.target_id),
       seq: Number(fresh.last_seq),
     };
   }
@@ -136,6 +142,7 @@ export async function boardRoutes(app: FastifyInstance, ctx: Ctx) {
     const description = v.str(b, 'description', { max: 16384, optional: true, trim: false });
     const visibility = v.oneOf(b, 'visibility', ['private', 'workspace'] as const, true);
     const background = v.oneOf(b, 'background', BACKGROUNDS, true);
+    const isTemplate = v.bool(b, 'isTemplate');
     const prefs: Record<string, unknown> = {};
     if (b.prefs && typeof b.prefs === 'object') {
       const p = b.prefs as Record<string, unknown>;
@@ -149,8 +156,8 @@ export async function boardRoutes(app: FastifyInstance, ctx: Ctx) {
       const row = await one(
         m.tx,
         `UPDATE boards SET name = COALESCE($2, name), description = COALESCE($3, description), visibility = COALESCE($4, visibility),
-                background = COALESCE($5, background), prefs = prefs || $6::jsonb, updated_at = now() WHERE id = $1 RETURNING *`,
-        [boardId, name ?? null, description ?? null, visibility ?? null, background ?? null, prefs],
+                background = COALESCE($5, background), prefs = prefs || $6::jsonb, is_template = COALESCE($7, is_template), updated_at = now() WHERE id = $1 RETURNING *`,
+        [boardId, name ?? null, description ?? null, visibility ?? null, background ?? null, prefs, isTemplate ?? null],
       );
       const changed: string[] = [];
       if (name !== undefined && name !== access.board.name) changed.push('name');
@@ -158,6 +165,7 @@ export async function boardRoutes(app: FastifyInstance, ctx: Ctx) {
       if (description !== undefined) changed.push('description');
       if (background) changed.push('background');
       if (Object.keys(prefs).length) changed.push('prefs');
+      if (isTemplate !== undefined && isTemplate !== access.board.is_template) changed.push('isTemplate');
       await m.emit(boardId, 'board.updated', { summary: { changed, name: row.name, from: access.board.name, visibility: row.visibility }, data: { board: boardJson(row) } });
       m.recheck.add(boardId);
       return row;
@@ -439,7 +447,7 @@ export async function boardRoutes(app: FastifyInstance, ctx: Ctx) {
       exportedAt: new Date().toISOString(),
       board: boardJson(access.board),
       members: await boardMembers(db, boardId),
-      labels: (await many(db, 'SELECT * FROM labels WHERE board_id = $1 ORDER BY created_at, id', [boardId])).map(labelJson),
+      labels: (await many(db, 'SELECT * FROM labels WHERE board_id = $1 ORDER BY position, id', [boardId])).map(labelJson),
       lists: (await many(db, 'SELECT * FROM lists WHERE board_id = $1 ORDER BY position, id', [boardId])).map(listJson),
       cards: (await many(db, 'SELECT * FROM cards WHERE board_id = $1 ORDER BY list_id, position, id', [boardId])).map((c) => ({
         id: c.id, listId: c.list_id, number: c.number, name: c.name, description: c.description, position: c.position,

@@ -5,6 +5,7 @@ import { HttpError, invalid, notFound } from '../lib/errors.js';
 import { hashPassword, randomToken, sha256, verifyPassword } from '../lib/security.js';
 import * as v from '../lib/validate.js';
 import { boardJson } from '../lib/serialize.js';
+import { MUTABLE_NOTIFICATIONS } from '../lib/constants.js';
 
 export const meJson = (u: any) => ({
   id: u.id,
@@ -93,6 +94,9 @@ export async function authRoutes(app: FastifyInstance, ctx: Ctx) {
     if (prefs) {
       if (typeof prefs.colorBlind === 'boolean') clean.colorBlind = prefs.colorBlind;
       if (typeof prefs.shortcuts === 'boolean') clean.shortcuts = prefs.shortcuts;
+      if (typeof prefs.labelNames === 'boolean') clean.labelNames = prefs.labelNames;
+      if (Array.isArray(prefs.mutedNotifications))
+        clean.mutedNotifications = [...new Set(prefs.mutedNotifications.filter((k): k is string => (MUTABLE_NOTIFICATIONS as readonly unknown[]).includes(k)))];
     }
     const row = await one(
       ctx.db,

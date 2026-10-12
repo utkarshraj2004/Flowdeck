@@ -154,6 +154,7 @@ export async function cardRoutes(app: FastifyInstance, ctx: Ctx) {
     if ('startAt' in b) changes.startAt = v.dateOrNull(b, 'startAt');
     if ('dueAt' in b) changes.dueAt = v.dateOrNull(b, 'dueAt');
     if ('dueComplete' in b) changes.dueComplete = v.bool(b, 'dueComplete');
+    if ('isTemplate' in b) changes.isTemplate = v.bool(b, 'isTemplate');
     if ('cover' in b) {
       const c = b.cover as any;
       if (c === null) changes.cover = null;
@@ -191,7 +192,7 @@ export async function cardRoutes(app: FastifyInstance, ctx: Ctx) {
       }
       const sets: string[] = [];
       const params: unknown[] = [card.id];
-      const colMap: Record<string, string> = { ...COLUMN, dueComplete: 'due_complete', cover: 'cover' };
+      const colMap: Record<string, string> = { ...COLUMN, dueComplete: 'due_complete', cover: 'cover', isTemplate: 'is_template' };
       for (const [k, val] of Object.entries(changes)) {
         params.push(val);
         sets.push(`${colMap[k]} = $${params.length}`);

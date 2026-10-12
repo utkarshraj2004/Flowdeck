@@ -28,6 +28,7 @@ Flowdeck’s own code has **no license chosen yet** (see README). The packages b
 | @dnd-kit/sortable | 10.0.0 | MIT |
 | @dnd-kit/utilities | 3.2.2 | MIT |
 | markdown-it | 15.0.2 | MIT |
+| lucide-react | 1.45.0 | ISC |
 
 ## Development and test only (not shipped)
 
@@ -61,7 +62,7 @@ Flowdeck’s own code has **no license chosen yet** (see README). The packages b
 ## All installed packages by license
 
 - MIT: 201
-- ISC: 17
+- ISC: 18
 - Apache-2.0: 7
 - BSD-3-Clause: 5
 - BlueOak-1.0.0: 5
