@@ -15,6 +15,7 @@ Flowdeck’s own code has **no license chosen yet** (see README). The packages b
 | @node-rs/argon2 | 2.2.2 | MIT | Password hashing (argon2id) |
 | fastify | 5.12.5 | MIT | HTTP server |
 | fractional-indexing | 4.0.0 | CC0-1.0 | Card and list ordering keys |
+| nodemailer | 10.1.0 | MIT-0 | Optional SMTP email |
 | pg | 8.23.1 | MIT | PostgreSQL client |
 
 ## Bundled into the web client (build time)
@@ -38,6 +39,7 @@ Flowdeck’s own code has **no license chosen yet** (see README). The packages b
 | @playwright/test | 1.64.0 | Apache-2.0 |
 | @types/markdown-it | 14.2.0 | MIT |
 | @types/node | 22.20.5 | MIT |
+| @types/nodemailer | 8.0.2 | MIT |
 | @types/pg | 8.23.1 | MIT |
 | @types/react | 19.3.0 | MIT |
 | @types/react-dom | 19.3.0 | MIT |
@@ -61,7 +63,7 @@ Flowdeck’s own code has **no license chosen yet** (see README). The packages b
 
 ## All installed packages by license
 
-- MIT: 201
+- MIT: 202
 - ISC: 18
 - Apache-2.0: 7
 - BSD-3-Clause: 5
@@ -71,6 +73,7 @@ Flowdeck’s own code has **no license chosen yet** (see README). The packages b
 - CC-BY-4.0: 1
 - BSD-2-Clause: 1
 - CC0-1.0: 1
+- MIT-0: 1
 - 0BSD: 1
 
 MPL-2.0 applies to `axe-core` (test-only accessibility scanner, not shipped). Icons are Unicode characters and an original SVG logo; no third-party icon or font files are bundled. Run `npm audit` after dependency changes.

@@ -1,0 +1,47 @@
+{
+  "root": "/tmp/claude-0/base-fe6",
+  "lists": 12,
+  "cardsPerList": 100,
+  "runs": 5,
+  "node": "v22.22.0",
+  "seedMs": 16185,
+  "snapshotEncoding": "br",
+  "apiSnapshotMs": 82.3,
+  "apiSnapshotBytesOnWire": 45324,
+  "apiRenameMs": 9.1,
+  "apiMoveMs": 10,
+  "jsBytes": 618255,
+  "jsGzipBytes": 208608,
+  "jsFiles": 13,
+  "jsEntryGzipBytes": 101265,
+  "boardLoadMs": 329,
+  "domNodes": 12302,
+  "cardElements": 1200,
+  "remoteCreateVisibleMs": 89,
+  "mainThreadFor20RemoteEvents": {
+    "taskMs": 313,
+    "scriptMs": 256,
+    "layoutMs": 3,
+    "styleMs": 0
+  },
+  "longTaskMsFor20RemoteEvents": 115,
+  "cardOpenMs": 507,
+  "cardOpenMainThread": {
+    "taskMs": 456,
+    "scriptMs": 69,
+    "layoutMs": 8,
+    "styleMs": 4
+  },
+  "apiRequestsOnCardOpen": 1,
+  "labelToggleMs": 201,
+  "apiRequestsOnLabelToggle": 2,
+  "composerAddVisibleMs": 119,
+  "filterType8CharsMs": 734,
+  "mainThreadForFilterTyping": {
+    "taskMs": 734,
+    "scriptMs": 522,
+    "layoutMs": 4,
+    "styleMs": 1
+  },
+  "dragDropVisibleMs": 153
+}

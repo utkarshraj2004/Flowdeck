@@ -1016,6 +1016,14 @@ hr.sep {
   align-items: center;
   min-width: 240px;
 }
+.cards-table input[type='datetime-local'] {
+  width: auto;
+  max-width: 220px;
+}
+.cards-table .due-text {
+  white-space: nowrap;
+  font-size: 12px;
+}
 .cell-input {
   border: 1px solid transparent;
   background: transparent;

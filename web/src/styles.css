@@ -1724,3 +1724,18 @@ main:focus {
     min-height: 44px;
   }
 }
+
+.session-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.session-list li {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+.session-list .pill {
+  margin-left: 8px;
+}

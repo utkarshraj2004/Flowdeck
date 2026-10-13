@@ -1,4 +1,33 @@
-# Performance: before and after the upgrade
+# Performance: before and after
+
+## Session 4 (2026-10-13): the card-open regression
+
+Same script (`scripts/perf/bench.mjs`), same machine, same synthetic data, production builds, run back to back. **Before** is `fe61517` (head of the upgrade PR when it was last reported); **after** is the session 4 code. Raw results: `before-fe61517-{large,typical}.json`, `after-session4-{large,typical}.json`. The bench now also records the main-thread split of a card open (`cardOpenMainThread`) and can write a Chrome trace of one (`--trace <dir>`).
+
+**Cause, measured:**
+- A trace showed React rendering in 5 ms slices for about 300 ms around every card open and close.
+- A render count showed that opening one card re-rendered all 12 lists and all 1,203 sortable cards. Closing re-rendered 600–950 of them.
+- The cause was that the dnd-kit sensor options and the `SortableContext` item arrays were new objects on every render of the board page, which re-rendered every draggable.
+- With them hoisted or memoised, opening a card re-renders **zero** lists and cards. The earlier explanation ("native layout of the bigger dialog") was wrong: layout is about 7 ms.
+- A second, smaller issue in the new unread markers was found the same way: every notification re-rendered every card. Markers are now passed per card.
+
+| Metric | Large, before | Large, after | Typical, before | Typical, after |
+|---|---:|---:|---:|---:|
+| Open a card (click → dialog content) | 507 ms | **269 ms** | 167 ms | **139 ms** |
+| Main-thread time during the open (script) | 456 ms (69 ms) | **221 ms (25 ms)** | 126 ms (26 ms) | **92 ms (17 ms)** |
+| A teammate's new card visible | 89 ms | **51 ms** | 36 ms | 36 ms |
+| Main-thread time for 20 remote edits | 313 ms | **203 ms** | 250 ms | **128 ms** |
+| Type 8 characters in the filter | 734 ms | **279 ms** | 291 ms | **159 ms** |
+| Drop a dragged card → shown in the new list | 153 ms | 125 ms | 48 ms | 43 ms |
+| Toggle a label in the card dialog | 201 ms | **94 ms** | 114 ms | **80 ms** |
+| Board load (navigation → all cards in DOM) | 329 ms | 312–401 ms ⚠ | 169 ms | 156 ms |
+| DOM nodes / entry JS (gzip) | 12,302 / 101 KB | 12,306 / 102 KB | 3,406 / 101 KB | 3,410 / 102 KB |
+
+For reference, opening a card on the large board took 344 ms before the session 3 upgrade (`854f7ed`), so the regression is gone with margin.
+
+⚠ **Board load** was measured twice on the final large-board code: 312 ms and 401 ms. The difference is within this machine's run-to-run noise (±30%, see below); nothing in session 4 adds work to the board load path except one small query for unread markers. The large "after" column comes from the second run, which was made after the unread-marker fix.
+
+# Session 3: before and after the upgrade
 
 Measured on 2026-10-12, with the same script, the same machine and the same synthetic data for both builds. The runs were back to back.
 
@@ -51,7 +80,7 @@ Scope of the numbers:
 
 **Reading the table:**
 - Board-load numbers move by about ±30% between identical runs on this machine. The first baseline run measured 513 ms for the same build. Treat differences under about 50 ms as noise.
-- **Regression still open:** opening a card on the 1,200-card board takes about 120 ms longer. A profile shows little React work (about 60 ms); most of the time is the browser's own layout and paint of the larger two-column dialog. On the typical board the difference is gone. Next things to try: a lighter dialog shell rendered first, then the comments column.
+- **Regression (fixed in session 4, see the top of this file):** opening a card on the 1,200-card board takes about 120 ms longer. A profile shows little React work (about 60 ms); most of the time is the browser's own layout and paint of the larger two-column dialog. On the typical board the difference is gone. Next things to try: a lighter dialog shell rendered first, then the comments column.
 - The label toggle now shows the change at once (optimistic) and makes one write plus one refresh. Before, it made one write plus two refreshes. The measured time includes waiting for the checkbox to settle.
 
 ## What changed, guided by profiles

@@ -30,6 +30,7 @@ export const ListColumn = memo(function ListColumn({
   onCardAction,
   onArchived,
   hasTemplates,
+  unreadIds,
 }: {
   list: List;
   cards: Card[];
@@ -45,6 +46,8 @@ export const ListColumn = memo(function ListColumn({
   onCardAction: (p: CardPop) => void;
   onArchived: (l: List) => void;
   hasTemplates: boolean;
+  /** Comma-separated ids of this list's cards with unread notifications. */
+  unreadIds: string;
 }) {
   const { run, setWatching } = useBoardActions();
   const { push } = useToasts();
@@ -134,7 +137,7 @@ export const ListColumn = memo(function ListColumn({
         <SortableContext items={cardItems} strategy={verticalListSortingStrategy} disabled={!canEdit || !!movingCardId}>
           <ol className="cards" aria-label={`Cards in ${list.name}`}>
             {cards.map((c) => (
-              <SortableCard key={c.id} card={c} view={view} onKey={onCardKey} onHover={onHover} onAction={onCardAction} moving={movingCardId === c.id} />
+              <SortableCard key={c.id} card={c} view={view} onKey={onCardKey} onHover={onHover} onAction={onCardAction} moving={movingCardId === c.id} unread={!!unreadIds && unreadIds.includes(c.id)} />
             ))}
           </ol>
         </SortableContext>

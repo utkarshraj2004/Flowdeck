@@ -43,13 +43,19 @@ Browser ──HTTPS/HTTP──▶ Fastify app
 | `server/src/lib/permissions.ts` | The permission policy: effective role per board (`admin` / `member` / `observer` / `viewer`), capability matrix, `requireBoard`, `requireWorkspace` |
 | `server/src/lib/mutation.ts` | `runMutation`: transaction, board locks, activity/seq allocation, notification fan-out (never to the actor; only to people who can see the board), post-commit publishing |
 | `server/src/lib/hub.ts` | In-process realtime hub: subscriptions, presence, "is editing" state with 30 s expiry, re-checking access after role, membership or visibility changes |
+| `server/src/lib/automation.ts` | Automation rules: validation against the board, matching card events, actions applied inside the triggering mutation (one savepoint per rule; failures recorded on the rule and as an `automation.failed` activity), "due soon" runs |
+| `server/src/lib/webhooks.ts` | Webhook outbox: deliveries queued in the mutation transaction, HMAC-SHA256 signing, private-address guard at connect time, retries with backoff |
+| `server/src/lib/mail.ts` | Optional SMTP (nodemailer): outbox, retries, opt-in digests of unread notifications, admin test email |
+| `server/src/lib/worker.ts` | In-process background worker (default every 5 s): webhook delivery, due-soon rules, digests, email. Claims work with `FOR UPDATE SKIP LOCKED` |
 | `server/src/lib/positions.ts` | Fractional keys for "top / bottom / after X", with rebalancing |
 | `server/src/lib/search.ts` | Search query parser and SQL builder |
 | `server/src/routes/*.ts` | REST endpoints (auth, workspaces/invites, boards, lists, cards, card details, attachments, search, notifications, admin, ws) |
 | `web/src/realtime.ts` | One WebSocket per tab: re-subscribes with the last applied `seq` after reconnects; heartbeat and browser `offline` handling for half-open sockets |
 | `web/src/board/BoardPage.tsx` | Board state, strictly ordered event ingestion with gap detection, polling fallback, drag/keyboard moves, filters |
 | `web/src/board/store.ts` | Event reducer (upserts the entity snapshots carried by events) |
-| `web/src/board/CardModal.tsx` | Card dialog: conflict handling, presence, drafts, all card features |
+| `web/src/board/CardModal.tsx` | Card dialog: conflict handling, presence, drafts, all card features; reads the card's notifications (unread marker) |
+| `web/src/board/views.tsx` | Table and calendar views of the same board state (same filter, permissions and live events; base-checked edits) |
+| `web/src/board/Automation.tsx` | Board menu panels for automation rules and webhooks |
 
 ## Data model
 
@@ -60,6 +66,10 @@ The tables are in [`migrations/0001_initial.sql`](../migrations/0001_initial.sql
 - `lists`, `labels`, `cards`, `card_labels`, `card_members`;
 - `checklists`, `check_items`, `comments`, `attachments`;
 - `activity` (the per-board event log), `subscriptions` (watching), `notifications`, `audit_log`.
+
+Later migrations are additive:
+- [`0002`](../migrations/0002_label_order_templates.sql): `labels.position`, `cards.is_template`, `boards.is_template`.
+- [`0003`](../migrations/0003_unread_automation_webhooks_email.sql): `automation_rules`, `automation_due_runs`, `webhooks`, `webhook_deliveries`, `email_outbox`, `notifications.emailed_at`, and an index for unread markers.
 
 Guest status is **derived**: a user is a guest when they have a `board_members` row but no `workspace_members` row.
 
@@ -77,6 +87,9 @@ Differences from the research data model (`research/05-data-model.md`):
 - **Reconnect:** exponential backoff (1 s → 30 s, with jitter); the browser `online` event triggers an immediate retry. The client pings every 15 s, and if nothing arrives for 45 s, or the browser goes `offline`, it drops the socket and reconnects. This catches half-open connections that never fire `close`.
 - **Fallback:** if the socket is down for 10 s, the board polls `GET /boards/:id/events?sinceSeq=` (every 5 s while visible, 60 s while hidden).
 - **Access:** checked on subscribe and re-checked after membership, role or visibility changes. The affected socket gets `board.member_role_changed` (with its new capabilities) or `board.access_revoked`.
+- **Sessions:** each socket's session is re-checked on its 25 s heartbeat; after logout, a password change, "sign out other devices" or a disabled account it gets `{type:'error', code:'session_ended'}` and close code 4401.
+- **Unread markers:** per-user `notification` and `notifications.unread` messages (with `cards: {cardId: stillUnread}`) keep the markers on card fronts in sync across tabs; the board snapshot carries `unreadCardIds`.
+- **Automation and webhooks:** rule actions are emitted in the same transaction, right after the triggering change, so clients receive them as ordinary consecutive events. Webhook deliveries are queued in that transaction and sent after commit by the worker.
 - **Presence:** `presence` lists who has the board open. `editing` (description/title) expires after 30 s without a heartbeat.
 
 **Scaling limit:** the hub lives in process memory, so a single app process serves all sockets. Multiple replicas would need a shared bus (PostgreSQL `LISTEN/NOTIFY` or Redis). This is not implemented.

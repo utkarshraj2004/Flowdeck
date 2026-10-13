@@ -18,6 +18,7 @@ export const SortableCard = memo(function SortableCard({
   onHover,
   onAction,
   moving,
+  unread,
 }: {
   card: Card;
   view: CardView;
@@ -25,12 +26,13 @@ export const SortableCard = memo(function SortableCard({
   onHover: (cardId: string | null) => void;
   onAction: (p: CardPop) => void;
   moving: boolean;
+  unread: boolean;
 }) {
   const { attributes: _a, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `card:${card.id}` });
   const style = { transform: CSS.Translate.toString(transform), transition };
   return (
     <li ref={setNodeRef} style={style} className={isDragging ? 'card-slot dragging' : 'card-slot'} {...listeners}>
-      <CardTile card={card} view={view} onKey={onKey} onHover={onHover} onAction={onAction} moving={moving} />
+      <CardTile card={card} view={view} onKey={onKey} onHover={onHover} onAction={onAction} moving={moving} unread={unread} />
     </li>
   );
 });
@@ -47,6 +49,7 @@ export const CardTile = memo(function CardTile({
   onAction,
   moving,
   overlay,
+  unread = false,
 }: {
   card: Card;
   view: CardView;
@@ -55,6 +58,8 @@ export const CardTile = memo(function CardTile({
   onAction?: (p: CardPop) => void;
   moving?: boolean;
   overlay?: boolean;
+  /** The viewer has unread notifications about this card. */
+  unread?: boolean;
 }) {
   const { openCard, patchCard, run, reload, toggleLabelNames } = useBoardActions();
   const ref = useRef<HTMLDivElement>(null);
@@ -66,7 +71,6 @@ export const CardTile = memo(function CardTile({
   const ds = dueState(card.dueAt, card.dueComplete);
   const b = card.badges;
   const watching = view.watched.has(card.id);
-  const unread = view.unread.has(card.id);
   const coverImg = card.cover?.attachmentId && view.covers ? `/api/v1/attachments/${card.cover.attachmentId}/download` : null;
   const interactive = !overlay && view.canEdit;
   const toggleComplete = (e: React.MouseEvent) => {

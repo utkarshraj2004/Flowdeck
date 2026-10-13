@@ -1,0 +1,47 @@
+{
+  "root": "/home/user/Flowdeck",
+  "lists": 12,
+  "cardsPerList": 25,
+  "runs": 5,
+  "node": "v22.22.0",
+  "seedMs": 4737,
+  "snapshotEncoding": "br",
+  "apiSnapshotMs": 23,
+  "apiSnapshotBytesOnWire": 12277,
+  "apiRenameMs": 13.7,
+  "apiMoveMs": 15.1,
+  "jsBytes": 648998,
+  "jsGzipBytes": 219286,
+  "jsFiles": 16,
+  "jsEntryGzipBytes": 101514,
+  "boardLoadMs": 156,
+  "domNodes": 3410,
+  "cardElements": 300,
+  "remoteCreateVisibleMs": 36,
+  "mainThreadFor20RemoteEvents": {
+    "taskMs": 128,
+    "scriptMs": 52,
+    "layoutMs": 5,
+    "styleMs": 0
+  },
+  "longTaskMsFor20RemoteEvents": 0,
+  "cardOpenMs": 139,
+  "cardOpenMainThread": {
+    "taskMs": 92,
+    "scriptMs": 17,
+    "layoutMs": 4,
+    "styleMs": 3
+  },
+  "apiRequestsOnCardOpen": 1,
+  "labelToggleMs": 80,
+  "apiRequestsOnLabelToggle": 2,
+  "composerAddVisibleMs": 44,
+  "filterType8CharsMs": 159,
+  "mainThreadForFilterTyping": {
+    "taskMs": 146,
+    "scriptMs": 59,
+    "layoutMs": 4,
+    "styleMs": 1
+  },
+  "dragDropVisibleMs": 43
+}

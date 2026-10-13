@@ -147,6 +147,27 @@ export async function authRoutes(app: FastifyInstance, ctx: Ctx) {
     return { ok: true };
   });
 
+  // Signed-in sessions (devices) of the current user; any of them can be signed out.
+  app.get('/me/sessions', async (req) => {
+    const u = auth(req);
+    const rows = await many(ctx.db, 'SELECT id, user_agent, created_at, last_seen_at FROM sessions WHERE user_id = $1 AND expires_at > now() ORDER BY last_seen_at DESC', [u.id]);
+    return { sessions: rows.map((s) => ({ id: s.id, userAgent: s.user_agent, createdAt: s.created_at, lastSeenAt: s.last_seen_at, current: s.id === u.session_id })) };
+  });
+
+  app.delete('/me/sessions/:sessionId', async (req) => {
+    const u = auth(req);
+    const { sessionId } = req.params as { sessionId: string };
+    if (sessionId === 'others') {
+      const r = await ctx.db.query('DELETE FROM sessions WHERE user_id = $1 AND id <> $2', [u.id, u.session_id]);
+      return { signedOut: r.rowCount };
+    }
+    if (!v.isUuid(sessionId)) throw notFound('Session not found');
+    if (sessionId === u.session_id) throw invalid('To end this session, log out.');
+    const r = await ctx.db.query('DELETE FROM sessions WHERE user_id = $1 AND id = $2', [u.id, sessionId]);
+    if (!r.rowCount) throw notFound('Session not found');
+    return { signedOut: 1 };
+  });
+
   // Home: workspaces, boards and stars for the signed-in user.
   app.get('/me/home', async (req) => {
     const u = auth(req);

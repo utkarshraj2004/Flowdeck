@@ -8,7 +8,7 @@ const info = (d) => require(`../node_modules/${d}/package.json`);
 const purpose = {
   fastify: 'HTTP server', '@fastify/compress': 'Response compression', '@fastify/cookie': 'Session cookies', '@fastify/multipart': 'Streaming file uploads',
   '@fastify/rate-limit': 'Login rate limiting', '@fastify/static': 'Serving the web client', '@fastify/websocket': 'Real-time WebSocket',
-  '@node-rs/argon2': 'Password hashing (argon2id)', 'fractional-indexing': 'Card and list ordering keys', pg: 'PostgreSQL client',
+  '@node-rs/argon2': 'Password hashing (argon2id)', 'fractional-indexing': 'Card and list ordering keys', pg: 'PostgreSQL client', nodemailer: 'Optional SMTP email',
 };
 const bundled = ['react', 'react-dom', 'react-router-dom', '@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities', 'markdown-it', 'lucide-react'];
 

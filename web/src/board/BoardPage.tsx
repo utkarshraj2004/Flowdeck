@@ -62,7 +62,6 @@ export interface CardView {
   covers: boolean;
   labelNames: boolean;
   watched: Set<string>;
-  unread: Set<string>;
 }
 function useCardView(state: BoardState | null, labelNames: boolean): CardView | null {
   const labels = state?.labels;
@@ -71,13 +70,12 @@ function useCardView(state: BoardState | null, labelNames: boolean): CardView | 
   const canEdit = !!state?.access.can.edit;
   const covers = state?.board.prefs.cardCovers !== false;
   const watchedIds = state?.watchedCardIds;
-  const unreadIds = state?.unreadCardIds;
   return useMemo(
     () =>
       labels && members && shortId
-        ? { shortId, labels, membersById: Object.fromEntries(members.map((m) => [m.id, m])), canEdit, covers, labelNames, watched: new Set(watchedIds), unread: new Set(unreadIds) }
+        ? { shortId, labels, membersById: Object.fromEntries(members.map((m) => [m.id, m])), canEdit, covers, labelNames, watched: new Set(watchedIds) }
         : null,
-    [labels, members, shortId, canEdit, covers, labelNames, watchedIds, unreadIds],
+    [labels, members, shortId, canEdit, covers, labelNames, watchedIds],
   );
 }
 
@@ -357,6 +355,18 @@ export function BoardPage() {
     return out;
   }, [cols, cardsMap]);
   const view = useCardView(state, labelNames);
+  // Unread markers change with every notification: pass them per list as a string (compared by value) so only
+  // the lists and cards whose marker changed re-render, not the whole board.
+  const unreadIds = state?.unreadCardIds;
+  const unreadByList = useMemo(() => {
+    const out: Record<string, string> = {};
+    if (!unreadIds?.length || !cardsMap) return out;
+    for (const id of unreadIds) {
+      const c = cardsMap[id];
+      if (c) out[c.listId] = out[c.listId] ? `${out[c.listId]},${id}` : id;
+    }
+    return out;
+  }, [unreadIds, cardsMap]);
   const hasTemplates = useMemo(() => Object.values(cardsMap ?? {}).some((c) => c.isTemplate && !c.archivedAt), [cardsMap]);
   const findList = (c: Cols, cardId: string) => Object.keys(c).find((l) => c[l].includes(cardId));
 
@@ -881,6 +891,7 @@ export function BoardPage() {
                       onCardAction={setCardPop}
                       onArchived={onListArchived}
                       hasTemplates={hasTemplates}
+                      unreadIds={unreadByList[l.id] ?? ''}
                     />
                   ))}
                   {access.can.edit && <AddList />}

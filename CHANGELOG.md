@@ -4,6 +4,26 @@ All notable changes to Flowdeck are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added — views, automation, integrations and account (session 4)
+- Unread markers on card fronts: a card shows a bell while you have unread notifications about it. They are stored per user, update live in every open tab, and are cleared when you open the card.
+- Table view: every open card as a sortable row. Title, list and due date are edited in place; a concurrent change is reported, never overwritten.
+- Calendar view: month or week by due date. Drag a card, or focus it and press Alt with an arrow key, to reschedule it (the time of day is kept). Cards without dates are listed separately.
+- Automation rules (board menu → Automation; board admins):
+  - Triggers: card added, moved into a list, marked complete, due within N hours.
+  - Actions: move, add/remove label, add/remove member, mark complete, set a due date, archive.
+  - Rules run inside the triggering change and are logged with their name. A failing rule is reported on the rule and in the activity; the change itself is still saved. Rules never trigger other rules.
+- Outgoing webhooks (board menu → Webhooks; board admins): HMAC-SHA256 signed JSON, event filter, retries with backoff, delivery log with retry, secret rotation, test delivery. Private network addresses are refused unless `FLOWDECK_WEBHOOK_ALLOW_PRIVATE=true`.
+- Optional email through your own SMTP server (`FLOWDECK_SMTP_URL`): “Forgot your password?” reset links, emailed invitations, opt-in digests of unread notifications, and email status plus a test button in Administration. Without SMTP, everything works as before.
+- Signed-in devices in Account settings: sign out one device or all others.
+- Object limits are configurable (`FLOWDECK_LIMIT_*`).
+- A background worker inside the app process (webhook and email delivery, “due soon” rules).
+- Migration `0003` (additive: new tables, one nullable column, indexes).
+
+### Fixed (session 4)
+- Opening or closing a card on a large board re-rendered every list and card, because the drag-and-drop configuration was recreated on each render. It now re-renders none of them; measurements are in `docs/perf/RESULTS.md`.
+- A WebSocket stayed connected, and kept receiving board events, after its session ended (logout, password change, disabled account). Sessions are now re-checked on every heartbeat.
+- GitHub Codespaces: the preview could wait for the database forever without saying why. `flowdeck status` now shows the reason and the database log; a lost password file or a missing database is repaired without touching data, and a restrictive `.codespace-data` folder no longer stops PostgreSQL.
+
 ### Added — interface and workflow upgrade (session 3)
 - Board interface:
   - Card fronts with thin label bars (names with `;`), a completion circle, a quick-edit button and icon badges.

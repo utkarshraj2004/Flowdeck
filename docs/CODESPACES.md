@@ -14,13 +14,20 @@ Stop or delete codespaces you are not using. A stopped codespace uses no compute
 
 ## 1. Create the codespace
 
-The Codespaces setup is on the implementation branch `claude/hopeful-galileo-us9nkk` until that pull request is merged.
+1. Open https://github.com/utkarshraj2004/Flowdeck and sign in to GitHub. The branch selector shows **`main`**, which has everything.
+2. Click the green **`<> Code`** button → **Codespaces** tab → **Create codespace on main**.
+   - To choose the machine size or region, click **`…`** → **New with options…** instead. Keep **Branch** set to `main`, **Dev container configuration** set to *Flowdeck (Codespaces preview)*, and pick the **2-core** machine.
+3. A browser tab opens with an editor (VS Code for the Web). The first start takes a few minutes: GitHub prepares the machine, then Flowdeck installs its packages, builds, and starts **in the background**. You can use the editor while that happens.
 
-1. Open https://github.com/utkarshraj2004/Flowdeck and sign in to GitHub.
-2. Click the **branch selector** above the file list (it shows `main`), and choose **`claude/hopeful-galileo-us9nkk`**.
-3. Click the green **`<> Code`** button → **Codespaces** tab → **Create codespace on claude/hopeful-galileo-us9nkk**.
-   - To choose the machine size or region, click **`…`** → **New with options…** instead. Keep **Branch** set to `claude/hopeful-galileo-us9nkk`, **Dev container configuration** set to *Flowdeck (Codespaces preview)*, and pick the **2-core** machine.
-4. A browser tab opens with an editor (VS Code for the Web). The first start takes a few minutes: GitHub prepares the machine, then Flowdeck installs its packages, builds, and starts **in the background**. You can use the editor while that happens.
+### Updating a codespace you already have
+
+A codespace created earlier from another branch (for example `claude/hopeful-galileo-us9nkk` or `claude/flowdeck-ui-upgrade`) keeps its own data in its `.codespace-data/` folder. To move it to the latest code **without losing that data**:
+
+1. In its terminal: `git fetch origin && git checkout main && git pull`. If git says local changes would be overwritten, stop and ask; do not force anything. `.codespace-data/` is ignored by git, so it is untouched.
+2. Command palette (<kbd>F1</kbd>) → **Codespaces: Rebuild Container** (not "Full Rebuild"). A rebuild keeps the `/workspaces` folder, so the database, uploads and the generated password stay. It is needed once, so the database container picks up the new start-up script.
+3. `flowdeck status` until `Server: ready`. Migrations run automatically, and your accounts and boards are still there.
+
+To try the new version **without touching** an existing codespace, create a second codespace on `main` instead; each codespace has its own separate data.
 
 ## 2. Open Flowdeck
 

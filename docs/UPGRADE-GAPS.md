@@ -39,17 +39,17 @@ Audit of `854f7ed` (PR #4 head), run on 2026-10-12 against the research screensh
 | 19 | Shortcuts from the research list: `e` quick edit, `d` dates, `l` labels, `m` members, `t` title, `-` checklist, `s` watch, `;` label names, `z` undo the last archive | P1 | Done |
 | 20 | List "Sort by" (name, due date, newest/oldest) | P2 | Done |
 | 21 | Recently viewed boards on the home page | P2 | Done |
-| 22 | Unread-notification bell badge on watched cards (Trello observation) | P2 | Pending |
+| 22 | Unread-notification bell badge on watched cards (Trello observation) | P2 | Done (session 4) |
 
-## Larger features: acceptance criteria first (P3, pending)
+## Larger features (P3): built in session 4 against these acceptance criteria
 
-| # | Feature | Acceptance criteria (summary) | Depends on |
+| # | Feature | Acceptance criteria (summary) | Status |
 |---|---|---|---|
-| 23 | Table view | Every open card in a board as a sortable row (title, list, labels, members, due, checklist). Inline edit of title/due. Same permissions and live updates as the board. Keyboard navigable. | Board store (done) |
-| 24 | Calendar view | Month/week grid of cards by due date. Drag to reschedule (base-checked like the dates popover). Cards without dates listed separately. | Table view patterns |
-| 25 | Automation rules | A trigger (card added to list / moved / due soon) plus an action (move, label, assign, archive). Runs server-side in the mutation transaction, is logged in activity, can be disabled. No silent failures. | Server rule engine, worker for time triggers |
-| 26 | Outgoing webhooks / integrations | Per-board signed webhooks on activity events, retried with backoff, with an admin log. No fake integrations. | Worker, secrets storage |
-| 27 | Email (invites, resets, digests) | Optional SMTP. Every in-app flow keeps working without it. | SMTP config, worker |
+| 23 | Table view | Every open card in a board as a sortable row (title, list, labels, members, due, checklist). Inline edit of title/due. Same permissions and live updates as the board. Keyboard navigable. | Done |
+| 24 | Calendar view | Month/week grid of cards by due date. Drag to reschedule (base-checked like the dates popover). Cards without dates listed separately. | Done (drag, or Alt+arrow keys) |
+| 25 | Automation rules | A trigger (card added to list / moved / due soon) plus an action (move, label, assign, archive). Runs server-side in the mutation transaction, is logged in activity, can be disabled. No silent failures. | Done |
+| 26 | Outgoing webhooks / integrations | Per-board signed webhooks on activity events, retried with backoff, with an admin log. No fake integrations. | Done |
+| 27 | Email (invites, resets, digests) | Optional SMTP. Every in-app flow keeps working without it. | Done (reset links, invites, digests) |
 
 ## Mobile and keyboard
 
@@ -67,8 +67,8 @@ Audit of `854f7ed` (PR #4 head), run on 2026-10-12 against the research screensh
 ## Status notes (end of session 3)
 
 - **Done** means implemented, covered by automated tests (`tests/api/upgrade.test.ts`, `tests/e2e/upgrade.spec.ts`, axe in `tests/e2e/a11y.spec.ts`) and inspected in a browser.
-- Rows 23–27 stay pending. They have acceptance criteria but no code, and the UI shows no controls for them.
-- **Measured regression, still open:** opening a card on a 1,200-card board is about 120 ms slower than before ([perf/RESULTS.md](perf/RESULTS.md)).
+- Rows 22–27 were built in session 4 and are covered by `tests/api/automation.test.ts`, `tests/api/email.test.ts` and `tests/e2e/views.spec.ts`.
+- The card-open regression on large boards was fixed in session 4: it was a re-render of every card caused by unstable drag-and-drop configuration, not dialog layout ([perf/RESULTS.md](perf/RESULTS.md)).
 - **Trello behaviour deliberately not copied:**
   - Space picks a card up for a keyboard move; it does not assign yourself.
   - Moving cards stays possible without a mouse (WCAG 2.5.7).

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { get, patch, post } from '../api';
+import { del, get, patch, post } from '../api';
 import { useAuth } from '../auth';
 import { useToasts } from '../components/Toasts';
+import { formatDate } from '../components/ui';
 
 /** Notification kinds a person can turn off, with plain-language descriptions (matches the server's mutable list). */
 const NOTIFICATION_KINDS: { kind: string; title: string; desc: string }[] = [
@@ -106,6 +107,7 @@ export function AccountPage() {
         </label>
         <button className="btn btn-primary">Change password</button>
       </form>
+      <Sessions />
       <form
         id="notifications"
         className="panel stack account-notifications"
@@ -165,4 +167,75 @@ export function AccountPage() {
       </form>
     </div>
   );
+}
+
+interface SessionRow {
+  id: string;
+  userAgent: string | null;
+  createdAt: string;
+  lastSeenAt: string;
+  current: boolean;
+}
+
+/** Where this account is signed in; any other device can be signed out (its live connection closes too). */
+function Sessions() {
+  const { push } = useToasts();
+  const [rows, setRows] = useState<SessionRow[] | null>(null);
+  const load = () =>
+    get('/me/sessions')
+      .then((r) => setRows(r.sessions))
+      .catch((e) => push({ kind: 'error', text: (e as Error).message }));
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const signOut = async (id: string) => {
+    try {
+      const r = await del(`/me/sessions/${id}`);
+      push({ kind: 'success', text: r.signedOut === 1 ? 'Device signed out' : `${r.signedOut} devices signed out` });
+    } catch (e) {
+      push({ kind: 'error', text: (e as Error).message });
+    }
+    load();
+  };
+  return (
+    <section className="panel stack" aria-labelledby="sessions-title">
+      <h2 id="sessions-title">Signed-in devices</h2>
+      {!rows ? (
+        <p aria-busy="true">Loading…</p>
+      ) : (
+        <ul className="session-list">
+          {rows.map((s) => (
+            <li key={s.id} className="row between wrap">
+              <span>
+                <strong>{describeAgent(s.userAgent)}</strong>
+                {s.current && <span className="pill">This device</span>}
+                <br />
+                <span className="muted small">
+                  Signed in {formatDate(s.createdAt)} · last active {formatDate(s.lastSeenAt)}
+                </span>
+              </span>
+              {!s.current && (
+                <button className="btn btn-small" onClick={() => signOut(s.id)}>
+                  Sign out
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {rows && rows.length > 1 && (
+        <button className="btn btn-light" onClick={() => signOut('others')}>
+          Sign out all other devices
+        </button>
+      )}
+    </section>
+  );
+}
+
+function describeAgent(ua: string | null) {
+  if (!ua) return 'Unknown device';
+  const browser = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
+  const os = /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iOS' : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : '';
+  return os ? `${browser} on ${os}` : browser;
 }

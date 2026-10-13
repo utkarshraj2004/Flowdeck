@@ -9,6 +9,15 @@ import { isUuid } from '../lib/validate.js';
  * session cookie; access is checked on subscribe and re-checked by the hub
  * whenever membership, roles or visibility change.
  */
+export async function sessionValid(ctx: Ctx, sessionId: string): Promise<boolean> {
+  try {
+    const r = await ctx.db.query('SELECT 1 FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id = $1 AND s.expires_at > now() AND u.disabled_at IS NULL', [sessionId]);
+    return !!r.rowCount;
+  } catch {
+    return true; // a database hiccup must not drop every socket; the next heartbeat checks again
+  }
+}
+
 export async function wsRoutes(app: FastifyInstance, ctx: Ctx) {
   app.get('/ws', { websocket: true }, (socket, req) => {
     if (!req.user || !originAllowed(req.headers.origin, req.headers, ctx)) {
@@ -23,11 +32,17 @@ export async function wsRoutes(app: FastifyInstance, ctx: Ctx) {
     const client = ctx.hub.newClient(user.id, send, () => socket.close(1001, 'server shutting down'));
     let alive = true;
     socket.on('pong', () => (alive = true));
-    const ping = setInterval(() => {
+    // Each heartbeat also re-checks the session: a socket must not outlive a logout, a password change,
+    // "sign out other devices" or a disabled account (it would keep receiving board events).
+    const ping = setInterval(async () => {
       if (!alive) return socket.terminate();
       alive = false;
       socket.ping();
-    }, 25_000);
+      if (!(await sessionValid(ctx, user.session_id))) {
+        send({ type: 'error', code: 'session_ended' });
+        socket.close(4401, 'session ended');
+      }
+    }, Number(process.env.FLOWDECK_WS_CHECK_MS) || 25_000);
 
     socket.on('message', async (raw) => {
       let msg: any;

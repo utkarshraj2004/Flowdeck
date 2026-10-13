@@ -1,17 +1,15 @@
 # Implementation handoff
 
-**Read this first when resuming Flowdeck development.** It records where the implementation stands, how to verify it, and what to do next. Last updated 2026-10-12 (session 2: GitHub Codespaces preview and ECC).
+**Read this first when resuming Flowdeck development.** It records where the implementation stands, how to verify it, and what to do next. Last updated 2026-10-13 (session 4: remaining features, fixes, and consolidation into `main`).
 
 ## Where things are
 
 | Item | Value |
 |---|---|
-| Implementation branch | `claude/hopeful-galileo-us9nkk` (`git log -1` shows the head) |
-| Implementation PR | https://github.com/utkarshraj2004/Flowdeck/pull/4 (draft; base `claude/trello-investigation-resume-kxgrvd`) |
-| Based on | Research branch `claude/trello-investigation-resume-kxgrvd` at `6f5f60e` (PR #3), which is based on PR #2's branch `claude/great-ride-udwvvd` |
-| Research PRs | #3 and #2 are **open and unmerged** (draft). Do not merge them without the owner's approval |
-| Merge order, when approved | PR #3 → `claude/great-ride-udwvvd`, PR #2 → `main`, then retarget the implementation PR to `main` (its diff will then show only the application) |
-| Version | 0.1.0, unreleased; no tags, no public instance |
+| Main branch | `main` holds everything: the research (PRs #2 and #3), the implementation (#4), the interface upgrade (#5) and the session 4 work. They were merged in that order with merge commits; `git log --first-parent main` shows the merges |
+| Old branches | `claude/great-ride-udwvvd`, `claude/trello-investigation-resume-kxgrvd`, `claude/hopeful-galileo-us9nkk`, `claude/flowdeck-ui-upgrade` are fully contained in `main`. They were kept (not deleted) |
+| Version | 0.1.0 with unreleased additions (CHANGELOG `[Unreleased]`); no tags, no public instance |
+| New work | Branch from `main` and open a PR against `main` |
 
 ## State at the end of session 1
 
@@ -144,6 +142,36 @@
 - Views, automation, webhooks and email (gaps 23–27): acceptance criteria only.
 - Real-phone checks: everything mobile was verified with emulation only.
 
+## Session 4: remaining features, fixes, consolidation
+
+**Built (all with tests):**
+- **Card-open regression fixed.** A trace and a render count showed that opening or closing a card re-rendered all 12 lists and all 1,200 sortable cards. The dnd-kit sensor options and the `SortableContext` item arrays were new on every render. Hoisting and memoising them fixed it. Large board: 507 → about 290 ms on the same machine, back to back (`docs/perf/RESULTS.md`).
+- **Unread markers** (gap 22): built from the user's unread notifications (`unreadCardIds` in the snapshot); live through `notification` and `notifications.unread {cards}`; opening a card reads its notifications. Passed per card, so a new notification re-renders only that card.
+- **Table and calendar views** (`web/src/board/views.tsx`, `?view=table|calendar`).
+- **Automation** (`server/src/lib/automation.ts`), **webhooks** (`lib/webhooks.ts`), **optional SMTP email** (`lib/mail.ts`) and the **background worker** (`lib/worker.ts`); migration `0003` (additive).
+- **v1 audit:**
+  - Configurable object limits (`FLOWDECK_LIMIT_*`).
+  - Signed-in devices in Account.
+  - **Defect fixed:** a WebSocket outlived its session (it kept receiving events after logout, password change or a disabled account); sessions are now re-checked on each heartbeat.
+- **Codespaces:** the "waiting for the database" hang. The cause could not be confirmed in the owner's codespace; the reproduced causes were these:
+  - the supervisor hid every database error;
+  - a lost password file locked the app out forever;
+  - a mode-700 `.codespace-data` crash-looped PostgreSQL.
+
+  New `.devcontainer/db-entrypoint.sh` repairs these without touching data, and `flowdeck status` prints the reason and the database log. **An existing codespace needs "Codespaces: Rebuild Container" to pick this up.**
+
+**Verified here:** see the PR description and CHANGELOG for test counts. Email and webhooks are tested only against local sinks (`tests/api/sinks.ts`), never real recipients.
+
+**Not verifiable here:** a real GitHub Codespace (including the owner's "crispy space happiness" and "shiny invention"), real phones, real SMTP providers.
+
+**ECC:**
+- Plugin `ecc@ecc` 2.2.3, project scope; `claude plugin list` shows it enabled.
+- What was used:
+  - its TypeScript and common rules;
+  - its hooks (the GateGuard fact-forcing prompts and a hook that blocks bypassing git hooks);
+  - the specialist-agent pattern: one agent in its own worktree diagnosed Codespaces and was limited to `.devcontainer/` and `docs/CODESPACES.md`.
+- No ECC slash commands were run.
+
 ## Decisions made (and why)
 
 | Decision | Reason |
@@ -151,7 +179,7 @@
 | TypeScript monorepo: Node 22 + Fastify + PostgreSQL + React/Vite | The research default (Q1); one language; maintained libraries |
 | Single process, in-process pub/sub | Research Q2 target (≤50 users) does not need a broker |
 | Field "base" checks instead of one row version | No false conflicts from label or checklist changes; explicit prompts for text (research 07) |
-| No email at all in v1 | Research Q5 default: invite links are shared by hand; resets come from admins |
+| Email is optional (SMTP the operator configures), off by default | Research Q5: invite links are shared by hand and resets come from admins; with SMTP, emails are an addition, never a requirement |
 | Invite sign-up does **not** create a personal workspace | Teams join the inviting workspace; avoids clutter. The first admin still gets a default workspace (J01.2) |
 | Members may delete archived cards and lists | Research Q8 default |
 | Workspace viewers are read-only until they join (self-join on by default) | Research Q10, implemented via the existing "Join board" flow |
@@ -163,32 +191,21 @@
 
 ## How to resume in a new session
 
-1. `git fetch origin && git checkout claude/hopeful-galileo-us9nkk && git pull`. If the PR was merged, start a new branch from `main`.
+1. `git fetch origin && git checkout main && git pull`, then create a branch for new work.
 2. The SessionStart hook runs `scripts/dev-setup.sh`. If tests can't connect to PostgreSQL, run it manually.
 3. Verify: `npm run check`. It needs Chromium at `/opt/pw-browsers/chromium` or `CHROMIUM_PATH`.
 4. For deployment checks in Claude Code Cloud:
    - start Docker with `dockerd > /tmp/dockerd.log 2>&1 &`;
    - pull `mirror.gcr.io/library/postgres:16-alpine` and `mirror.gcr.io/library/node:22-bookworm-slim`, and `docker tag` them as `postgres:16-alpine` / `node:22-bookworm-slim` (Docker Hub is rate-limited there);
    - run `EXTRA_CA_CERT=/root/.ccr/ca-bundle.crt node scripts/compose-smoke.mjs`.
-5. Check the implementation PR's CI and review comments before new work.
+5. Check CI on `main` and any open PR before new work.
 
 ## Suggested next steps (in order)
 
-0. The owner launches a real codespace (docs/CODESPACES.md) and reports anything that differs from the local simulation.
-1. Get CI green on the PR, and fix anything that only fails on GitHub runners.
-2. The owner runs [research/PHONE-CHECKLIST.md](../research/PHONE-CHECKLIST.md)-style checks on a real phone against a Flowdeck instance (long-press, drag between lists, auto-scroll, cancel).
-3. Small gaps:
-   - card-open time on very large boards (see perf/RESULTS.md);
-   - unread markers on watched cards;
-   - session list in account settings;
-   - configurable limits;
-   - lock-time of sorting very large lists.
-4. Operations:
-   - scheduled backups and their status in the admin page;
-   - load test (O4: 5,000 cards, 30 clients);
-   - Firefox/WebKit in CI;
-   - exercise the HTTPS profile.
-5. Roadmap items in the README (SMTP, table/calendar views, automation; acceptance criteria in UPGRADE-GAPS.md, 2FA/SSO). Trello import only if the owner asks.
+1. The owner rebuilds or creates a codespace from `main` (docs/CODESPACES.md) and reports what `flowdeck status` shows.
+2. The owner runs [research/PHONE-CHECKLIST.md](../research/PHONE-CHECKLIST.md)-style checks on a real phone (long-press, drag between lists, auto-scroll, cancel). This is the only open first-version item.
+3. Operations: scheduled backups and their status in the admin page; load test (O4: 5,000 cards, 30 clients); Firefox/WebKit in CI; exercise the HTTPS profile.
+4. Roadmap (README → Roadmap): due reminders and recurring dates (worker and SMTP exist now), custom fields, automation buttons and scheduled rules, 2FA/SSO. Trello import only if the owner asks.
 
 ## Open questions for the owner
 

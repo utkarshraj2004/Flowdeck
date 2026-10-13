@@ -106,11 +106,13 @@ export function TableView({ lists, colCards }: ViewProps) {
             const ds = dueState(c.dueAt, c.dueComplete);
             return (
               <tr key={c.id} data-row-card={c.id}>
-                <td className="cell-title">
-                  {canEdit ? <TitleCell card={c} onSave={(name) => save(c, { name }, { name: c.name })} /> : <span>{c.name}</span>}
-                  <button type="button" className="btn btn-small btn-light" onClick={() => openCard(c.number)} aria-label={`Open card ${c.name}`}>
-                    Open
-                  </button>
+                <td>
+                  <div className="cell-title">
+                    {canEdit ? <TitleCell card={c} onSave={(name) => save(c, { name }, { name: c.name })} /> : <span>{c.name}</span>}
+                    <button type="button" className="btn btn-small btn-light" onClick={() => openCard(c.number)} aria-label={`Open card ${c.name}`}>
+                      Open
+                    </button>
+                  </div>
                 </td>
                 <td>
                   {canEdit ? (
