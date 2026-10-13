@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { patch, post } from '../api';
+import { get, patch, post } from '../api';
 import { useAuth } from '../auth';
 import { useToasts } from '../components/Toasts';
 
@@ -24,6 +24,13 @@ export function AccountPage() {
   const { push } = useToasts();
   const loc = useLocation();
   const [muted, setMuted] = useState<string[]>(me?.prefs.mutedNotifications ?? []);
+  const [emailDigest, setEmailDigest] = useState<boolean>(!!me?.prefs.emailNotifications);
+  const [emailEnabled, setEmailEnabled] = useState(false);
+  useEffect(() => {
+    get('/auth/options')
+      .then((r) => setEmailEnabled(!!r.emailEnabled))
+      .catch(() => setEmailEnabled(false));
+  }, []);
   const [savingNotifs, setSavingNotifs] = useState(false);
   useEffect(() => {
     document.title = 'Account · Flowdeck';
@@ -107,7 +114,7 @@ export function AccountPage() {
           e.preventDefault();
           setSavingNotifs(true);
           try {
-            const r = await patch('/me', { prefs: { mutedNotifications: muted } });
+            const r = await patch('/me', { prefs: { mutedNotifications: muted, emailNotifications: emailDigest } });
             setMe(r.user);
             push({ kind: 'success', text: 'Notification settings saved' });
           } catch (err) {
@@ -121,6 +128,17 @@ export function AccountPage() {
           Notifications
         </h2>
         <p className="muted small">Choose what Flowdeck tells you about. Unticked kinds are not delivered to you at all.</p>
+        <label className="notif-kind">
+          <input type="checkbox" checked={emailDigest} disabled={!emailEnabled} onChange={(e) => setEmailDigest(e.target.checked)} aria-describedby="email-digest-desc" />
+          <span>
+            <span className="notif-kind-title">Email me unread notifications</span>
+            <span id="email-digest-desc" className="muted small">
+              {emailEnabled
+                ? ' One email listing notifications you have not read after a few minutes. Each one is emailed once.'
+                : ' Email is not set up on this Flowdeck server; notifications stay in the app.'}
+            </span>
+          </span>
+        </label>
         <fieldset className="notif-kinds">
           <legend className="visually-hidden">Notify me when</legend>
           {NOTIFICATION_KINDS.map(({ kind, title, desc }) => (

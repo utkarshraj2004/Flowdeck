@@ -66,6 +66,7 @@ export const CardTile = memo(function CardTile({
   const ds = dueState(card.dueAt, card.dueComplete);
   const b = card.badges;
   const watching = view.watched.has(card.id);
+  const unread = view.unread.has(card.id);
   const coverImg = card.cover?.attachmentId && view.covers ? `/api/v1/attachments/${card.cover.attachmentId}/download` : null;
   const interactive = !overlay && view.canEdit;
   const toggleComplete = (e: React.MouseEvent) => {
@@ -78,6 +79,7 @@ export const CardTile = memo(function CardTile({
   };
   const summary = [
     card.name,
+    unread ? 'unread notifications' : '',
     card.isTemplate ? 'template' : '',
     card.dueComplete ? 'complete' : '',
     cardLabels.length ? `labels ${cardLabels.map((l) => l.name || colorName(l.color)).join(', ')}` : '',
@@ -147,6 +149,11 @@ export const CardTile = memo(function CardTile({
           {card.isTemplate && (
             <span className="badge badge-template ci i-template">
               Template
+            </span>
+          )}
+          {unread && (
+            <span className="badge badge-unread ci i-bell" title="New activity you have not seen yet">
+              <span className="visually-hidden">Unread notifications</span>
             </span>
           )}
           {watching && (

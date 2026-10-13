@@ -9,6 +9,7 @@ import { fileKeys, removeFiles } from '../lib/files.js';
 import * as v from '../lib/validate.js';
 import { createSession, createWorkspace, meJson, VISIBLE_BOARDS_SQL } from './auth.js';
 import { runMutation } from '../lib/mutation.js';
+import { enqueueEmail } from '../lib/mail.js';
 
 const inviteJson = (i: any, url?: string) => ({
   id: i.id,
@@ -245,7 +246,20 @@ export async function workspaceRoutes(app: FastifyInstance, ctx: Ctx) {
     );
     // Read back so the response always reflects a stored invitation (never a silent no-op).
     const stored = await one(db, 'SELECT * FROM invites WHERE id = $1', [inv.id]);
-    return { invite: inviteJson(stored, `${ctx.config.baseUrl}/invite/${token}`) };
+    const link = `${ctx.config.baseUrl}/invite/${token}`;
+    // With email configured, an email invitation is also sent (the link is always shown, so it can be shared by hand too).
+    let emailed = false;
+    if (email && b.sendEmail !== false) {
+      const ws = await one(db, 'SELECT name FROM workspaces WHERE id = $1', [id]);
+      emailed = await enqueueEmail(db, ctx.config, {
+        to: email,
+        kind: 'invite',
+        subject: `${u.full_name} invited you to ${ws.name} on Flowdeck`,
+        text: `${u.full_name} invited you to join the workspace “${ws.name}” on Flowdeck.\n\nAccept the invitation (valid for 7 days):\n${link}\n`,
+      });
+      if (emailed) void ctx.worker.tick();
+    }
+    return { invite: inviteJson(stored, link), emailed };
   });
 
   app.delete('/invites/:inviteId', async (req) => {

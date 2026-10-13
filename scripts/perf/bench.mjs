@@ -23,6 +23,7 @@ const CARDS = Number(args.cards ?? 100);
 const RUNS = Number(args.runs ?? 5);
 const OUT = args.out;
 const PROFILE_DIR = args.profile; // optional: write CPU profiles of the filter and drag steps here
+const TRACE_DIR = args.trace; // optional: write a Chrome performance trace of one card open here
 const BASE = `http://127.0.0.1:${PORT}`;
 const ADMIN_URL = process.env.TEST_DATABASE_URL || 'postgres://flowdeck:flowdeck@localhost:5432/postgres';
 const DB = `flowdeck_perf_${PORT}`;
@@ -263,17 +264,23 @@ async function measure(a, b, board, lists) {
 
   // 6. Open a card dialog: click → title rendered; count API calls
   const opens = [];
+  const splits = [];
   let openReqs = 0;
   for (let i = 0; i < RUNS; i++) {
     const tile = page.locator('[data-card-id]').filter({ hasText: `Task ${20 + i}:` }).first();
     await tile.scrollIntoViewIfNeeded();
     requests.length = 0;
     const stopProfile = i === 1 ? await profile(page, 'card-open') : async () => {};
+    if (TRACE_DIR && i === 2) await browser.startTracing(page, { path: path.join(TRACE_DIR, 'card-open.json'), screenshots: false });
     const t0 = Date.now();
-    await tile.click();
-    await page.waitForSelector('#card-title button, #card-title');
-    await page.waitForFunction(() => !!document.querySelector('[role="dialog"]') && !document.querySelector('[role="dialog"] .skeleton'));
+    const split = await mainThread(page, async () => {
+      await tile.click();
+      await page.waitForSelector('#card-title button, #card-title');
+      await page.waitForFunction(() => !!document.querySelector('[role="dialog"]') && !document.querySelector('[role="dialog"] .skeleton'));
+    });
     opens.push(Date.now() - t0);
+    splits.push(split);
+    if (TRACE_DIR && i === 2) await browser.stopTracing();
     await stopProfile();
     await page.waitForTimeout(300);
     openReqs = requests.length;
@@ -281,6 +288,8 @@ async function measure(a, b, board, lists) {
     await page.waitForFunction(() => !document.querySelector('[role="dialog"]'));
   }
   out.cardOpenMs = median(opens);
+  // Main-thread split of the card open (median per field): where the time goes (script vs layout vs style).
+  out.cardOpenMainThread = Object.fromEntries(Object.keys(splits[0]).map((k) => [k, median(splits.map((x) => x[k]))]));
   out.apiRequestsOnCardOpen = openReqs;
 
   // 7. Toggle a label inside the dialog: requests triggered and time until the chip shows

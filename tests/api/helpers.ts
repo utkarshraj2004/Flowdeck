@@ -20,6 +20,8 @@ export interface TestServer {
   dbName: string;
   dataDir: string;
   close: () => Promise<void>;
+  /** Runs one background-worker pass (webhooks, due-soon rules, email). */
+  tick: () => Promise<void>;
   restart: () => Promise<TestServer>;
 }
 
@@ -45,13 +47,13 @@ function urlFor(dbName: string) {
   return u.toString();
 }
 
-export async function startServer(opts: { dbName?: string; dataDir?: string; maxUploadBytes?: number } = {}): Promise<TestServer> {
+export async function startServer(opts: { dbName?: string; dataDir?: string; maxUploadBytes?: number; config?: Partial<Config> } = {}): Promise<TestServer> {
   const dbName = opts.dbName ?? (await createTestDatabase());
   const dataDir = opts.dataDir ?? fs.mkdtempSync(path.join(os.tmpdir(), 'flowdeck-test-'));
   const databaseUrl = urlFor(dbName);
   const db = createPool(databaseUrl);
   await migrate(db);
-  const config = loadConfig({ databaseUrl, dataDir, port: 0, host: '127.0.0.1', webDir: '/nonexistent', ...(opts.maxUploadBytes ? { maxUploadBytes: opts.maxUploadBytes } : {}) });
+  const config = loadConfig({ databaseUrl, dataDir, port: 0, host: '127.0.0.1', webDir: '/nonexistent', workerIntervalMs: 0, ...(opts.maxUploadBytes ? { maxUploadBytes: opts.maxUploadBytes } : {}), ...opts.config });
   const app = await buildApp(config, { db });
   await app.listen({ host: '127.0.0.1', port: 0 });
   const addr = app.server.address() as { port: number };
@@ -63,6 +65,7 @@ export async function startServer(opts: { dbName?: string; dataDir?: string; max
     config,
     dbName,
     dataDir,
+    tick: () => app.ctx.worker.tick(),
     close: async () => {
       await app.close();
       await db.end();
@@ -70,7 +73,7 @@ export async function startServer(opts: { dbName?: string; dataDir?: string; max
     restart: async () => {
       await app.close();
       await db.end();
-      return startServer({ dbName, dataDir });
+      return startServer({ dbName, dataDir, config: opts.config });
     },
   };
   return server;

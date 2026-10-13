@@ -111,6 +111,13 @@ export async function boardRoutes(app: FastifyInstance, ctx: Ctx) {
       `SELECT s.target_id FROM subscriptions s JOIN cards c ON c.id = s.target_id WHERE s.user_id = $1 AND s.target_type = 'card' AND c.board_id = $2 AND c.archived_at IS NULL`,
       [userId, boardId],
     );
+    // Cards with notifications this user has not read yet (unread markers on card fronts).
+    const unread = await many(
+      db,
+      `SELECT DISTINCT n.card_id FROM notifications n JOIN cards c ON c.id = n.card_id
+        WHERE n.user_id = $1 AND n.board_id = $2 AND n.read_at IS NULL AND n.card_id IS NOT NULL AND c.board_id = $2`,
+      [userId, boardId],
+    );
     return {
       board: { ...boardJson(fresh), starred: !!star, watching: !!watch },
       workspace: ws,
@@ -121,6 +128,7 @@ export async function boardRoutes(app: FastifyInstance, ctx: Ctx) {
       cards,
       watchedListIds: listWatches.map((r) => r.target_id),
       watchedCardIds: cardWatches.map((r) => r.target_id),
+      unreadCardIds: unread.map((r) => r.card_id),
       seq: Number(fresh.last_seq),
     };
   }

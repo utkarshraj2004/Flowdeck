@@ -3,6 +3,8 @@ import { withTx } from '../db.js';
 import { boardAccess } from './permissions.js';
 import { MUTABLE_NOTIFICATIONS } from './constants.js';
 import type { EventMsg, Hub } from './hub.js';
+import { runAutomations } from './automation.js';
+import { enqueueWebhooks } from './webhooks.js';
 
 export interface NotificationOut {
   id: string;
@@ -24,6 +26,8 @@ export class Mutation {
   events: EventMsg[] = [];
   notifications: NotificationOut[] = [];
   recheck = new Set<string>();
+  /** Set by the automation worker: its own changes do not trigger further rules. */
+  skipAutomation = false;
   private locked = new Set<string>();
 
   constructor(
@@ -120,7 +124,11 @@ export async function runMutation<T>(
   let m!: Mutation;
   const data = await withTx(deps.db, async (tx) => {
     m = new Mutation(tx, actorId, clientMutationId);
-    return fn(m);
+    const result = await fn(m);
+    // Same transaction: automation actions and webhook deliveries commit together with the change.
+    if (!m.skipAutomation) await runAutomations(m, [...m.events]);
+    await enqueueWebhooks(tx, m.events);
+    return result;
   });
   for (const e of m.events) deps.hub.publish(e);
   if (m.notifications.length) {

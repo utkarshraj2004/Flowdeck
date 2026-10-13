@@ -115,6 +115,14 @@ export function CardModal({ number, onClose }: { number: number; onClose: () => 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardId, onEvent, loadSoon]);
 
+  // Seeing the card reads its notifications (clears the unread marker here and in the bell), also when
+  // a new notification about it arrives while the dialog is open.
+  const isUnread = !!cardId && state.unreadCardIds.includes(cardId);
+  useEffect(() => {
+    if (!isUnread || !cardId) return;
+    post('/notifications/read', { cardId }).catch(() => undefined); // the marker stays and the next open retries
+  }, [isUnread, cardId]);
+
   // Opened with a shortcut from the board (`-` adds a checklist).
   const openedChecklist = useRef(false);
   useEffect(() => {

@@ -9,7 +9,7 @@ export interface Me {
   fullName: string;
   initials: string;
   isSystemAdmin: boolean;
-  prefs: { colorBlind: boolean; shortcuts: boolean; labelNames?: boolean; mutedNotifications?: string[] };
+  prefs: { colorBlind: boolean; shortcuts: boolean; labelNames?: boolean; mutedNotifications?: string[]; emailNotifications?: boolean };
 }
 
 interface AuthState {

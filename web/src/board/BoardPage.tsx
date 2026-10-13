@@ -37,7 +37,16 @@ import { loadCardModal } from './lazy';
 
 const CardModal = lazy(() => loadCardModal().then((m) => ({ default: m.CardModal })));
 const BoardMenu = lazy(() => import('./BoardMenu').then((m) => ({ default: m.BoardMenu })));
+const TableView = lazy(() => import('./views').then((m) => ({ default: m.TableView })));
+const CalendarView = lazy(() => import('./views').then((m) => ({ default: m.CalendarView })));
 const MembersDialog = lazy(() => import('./MembersDialog').then((m) => ({ default: m.MembersDialog })));
+
+// Drag configuration lives outside the component: new option objects on every render would give dnd-kit new
+// activators, and every sortable list and card would re-render (measured: opening a card re-rendered all 1,200).
+const MOUSE_SENSOR = { activationConstraint: { distance: 6 } };
+const TOUCH_SENSOR = { activationConstraint: { delay: 300, tolerance: 8 } };
+// Scroll by finger/pointer position: on phones a card is ~85% of the screen wide, so rect-based auto-scroll never stops.
+const AUTO_SCROLL = { activator: AutoScrollActivator.Pointer, threshold: { x: 0.15, y: 0.15 }, acceleration: 6 };
 
 type Cols = Record<string, string[]>;
 const EMPTY: Card[] = [];
@@ -53,6 +62,7 @@ export interface CardView {
   covers: boolean;
   labelNames: boolean;
   watched: Set<string>;
+  unread: Set<string>;
 }
 function useCardView(state: BoardState | null, labelNames: boolean): CardView | null {
   const labels = state?.labels;
@@ -61,12 +71,13 @@ function useCardView(state: BoardState | null, labelNames: boolean): CardView | 
   const canEdit = !!state?.access.can.edit;
   const covers = state?.board.prefs.cardCovers !== false;
   const watchedIds = state?.watchedCardIds;
+  const unreadIds = state?.unreadCardIds;
   return useMemo(
     () =>
       labels && members && shortId
-        ? { shortId, labels, membersById: Object.fromEntries(members.map((m) => [m.id, m])), canEdit, covers, labelNames, watched: new Set(watchedIds) }
+        ? { shortId, labels, membersById: Object.fromEntries(members.map((m) => [m.id, m])), canEdit, covers, labelNames, watched: new Set(watchedIds), unread: new Set(unreadIds) }
         : null,
-    [labels, members, shortId, canEdit, covers, labelNames, watchedIds],
+    [labels, members, shortId, canEdit, covers, labelNames, watchedIds, unreadIds],
   );
 }
 
@@ -188,6 +199,28 @@ export function BoardPage() {
     };
   }, [boardId, ingest, load]);
 
+  // Unread markers: per-user notifications arrive on the user channel, not the board channel.
+  useEffect(() => {
+    if (!boardId) return;
+    const off = realtime.onUserMessage((m) => {
+      if (m.type === 'notification' && m.notification?.boardId === boardId && m.notification.cardId) {
+        const cardId = m.notification.cardId as string;
+        setState((s) => (s && !s.unreadCardIds.includes(cardId) ? { ...s, unreadCardIds: [...s.unreadCardIds, cardId] } : s));
+      } else if (m.type === 'notifications.unread') {
+        const cards = (m.cards ?? {}) as Record<string, boolean>;
+        setState((s) => {
+          if (!s) return s;
+          let ids = m.all ? [] : s.unreadCardIds.filter((id) => cards[id] !== false);
+          for (const [id, on] of Object.entries(cards)) if (on && !ids.includes(id) && s.cards[id]) ids = [...ids, id];
+          return ids.length === s.unreadCardIds.length && ids.every((id, i) => id === s.unreadCardIds[i]) ? s : { ...s, unreadCardIds: ids };
+        });
+      }
+    });
+    return () => {
+      off();
+    };
+  }, [boardId]);
+
   // Polling fallback when the socket stays down (research 06): catch up via the events feed.
   useEffect(() => {
     if (!boardId || status === 'online') return;
@@ -274,6 +307,7 @@ export function BoardPage() {
   // ---- filter ----
   // Filter state is local (synchronous, so controls never flicker) and mirrored into the URL so it can be shared.
   const [filter, setFilterState] = useState<Filter>(() => filterFromParams(params));
+  const boardView = (['table', 'calendar'] as const).find((v) => v === params.get('view')) ?? 'board';
   const filterActive = !!(filter.q || filter.members.length || filter.labels.length || filter.due || filter.status);
   const setFilter = (f: Partial<Filter>) => {
     const next = { ...filter, ...f };
@@ -287,6 +321,8 @@ export function BoardPage() {
   // ---- columns (visible cards per list), drag state and keyboard moves ----
   const listsMap = state?.lists;
   const lists: List[] = useMemo(() => (listsMap ? Object.values(listsMap).filter((l) => !l.archivedAt).sort(byPos) : []), [listsMap]);
+  // A new items array on every render would re-render every sortable list (and, through them, every card).
+  const listItems = useMemo(() => lists.map((l) => `list:${l.id}`), [lists]);
   // Typing in the filter stays responsive: the board re-filters at a lower priority.
   const deferredFilter = useDeferredValue(filter);
   const cardsMap = state?.cards;
@@ -383,7 +419,7 @@ export function BoardPage() {
     return isList ? closestCenter({ ...args, droppableContainers }) : closestCorners({ ...args, droppableContainers });
   };
 
-  const sensors = useSensors(useSensor(MouseSensor, { activationConstraint: { distance: 6 } }), useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }));
+  const sensors = useSensors(useSensor(MouseSensor, MOUSE_SENSOR), useSensor(TouchSensor, TOUCH_SENSOR));
 
   const onDragStart = (e: DragStartEvent) => {
     const id = String(e.active.id);
@@ -766,6 +802,23 @@ export function BoardPage() {
                 <span className="hide-sm">Clear</span>
               </button>
             )}
+            <div className="segmented on-dark" role="group" aria-label="View">
+              {(['board', 'table', 'calendar'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  aria-pressed={boardView === v}
+                  onClick={() => {
+                    const p = new URLSearchParams(params);
+                    if (v === 'board') p.delete('view');
+                    else p.set('view', v);
+                    setParams(p);
+                  }}
+                >
+                  {v === 'board' ? 'Board' : v === 'table' ? 'Table' : 'Calendar'}
+                </button>
+              ))}
+            </div>
             <button className="btn btn-small btn-light share-btn" onClick={() => setShowMembers(true)} aria-label="Share">
               <UserPlus size={16} />
               <span className="hide-sm">Share</span>
@@ -791,18 +844,25 @@ export function BoardPage() {
             </div>
           )}
           {showFilter && <FilterPanel filter={filter} setFilter={setFilter} onClose={() => setShowFilter(false)} />}
+          {boardView !== 'board' && (
+            <div className="board-canvas view-canvas">
+              <Suspense fallback={<p className="board-empty" aria-busy="true">Loading view…</p>}>
+                {boardView === 'table' ? <TableView lists={lists} colCards={colCards} /> : <CalendarView lists={lists} colCards={colCards} />}
+              </Suspense>
+            </div>
+          )}
+          {boardView === 'board' && (
           <div className="board-canvas" aria-label={`${board.name} lists`}>
             <DndContext
               sensors={sensors}
               collisionDetection={collisions}
-              // Scroll by finger/pointer position: on phones a card is ~85% of the screen wide, so rect-based auto-scroll never stops.
-              autoScroll={{ activator: AutoScrollActivator.Pointer, threshold: { x: 0.15, y: 0.15 }, acceleration: 6 }}
+              autoScroll={AUTO_SCROLL}
               onDragStart={onDragStart}
               onDragOver={onDragOver}
               onDragEnd={onDragEnd}
               onDragCancel={() => (setDragCols(null), setActiveDrag(null))}
             >
-              <SortableContext items={lists.map((l) => `list:${l.id}`)} strategy={horizontalListSortingStrategy} disabled={!access.can.edit}>
+              <SortableContext items={listItems} strategy={horizontalListSortingStrategy} disabled={!access.can.edit}>
                 <ol className="lists">
                   {lists.map((l) => (
                     <ListColumn
@@ -830,6 +890,7 @@ export function BoardPage() {
             </DndContext>
             {lists.length === 0 && !access.can.edit && <p className="board-empty">This board has no lists yet.</p>}
           </div>
+          )}
           <p id="card-help" className="visually-hidden">
             Enter opens the card. Space picks it up to move with the arrow keys. E: quick edit, L: labels, M: members, D: dates, C: archive.
           </p>

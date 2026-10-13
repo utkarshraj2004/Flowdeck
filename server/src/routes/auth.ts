@@ -6,6 +6,8 @@ import { hashPassword, randomToken, sha256, verifyPassword } from '../lib/securi
 import * as v from '../lib/validate.js';
 import { boardJson } from '../lib/serialize.js';
 import { MUTABLE_NOTIFICATIONS } from '../lib/constants.js';
+import { enqueueEmail, mailEnabled } from '../lib/mail.js';
+import { createUserToken } from '../lib/tokens.js';
 
 export const meJson = (u: any) => ({
   id: u.id,
@@ -74,6 +76,32 @@ export async function authRoutes(app: FastifyInstance, ctx: Ctx) {
     },
   );
 
+  // What the sign-in page may offer (no account details).
+  app.get('/auth/options', async () => ({ emailEnabled: mailEnabled(ctx.config) }));
+
+  // Self-service password reset, only when email is configured. The answer never says whether the account exists.
+  app.post(
+    '/auth/forgot',
+    { config: { rateLimit: { max: 5, timeWindow: 60_000, keyGenerator: (req: any) => req.ip } } },
+    async (req) => {
+      if (!mailEnabled(ctx.config)) throw new HttpError(404, 'email_disabled', 'Password reset by email is not available. Ask your Flowdeck administrator for a reset link.');
+      const email = v.email(v.body(req.body));
+      const user = await one(ctx.db, 'SELECT id, email, full_name, password_hash FROM users WHERE lower(email) = lower($1) AND disabled_at IS NULL', [email]);
+      if (user?.password_hash) {
+        const token = await createUserToken(ctx.db, user.id, 'reset');
+        await enqueueEmail(ctx.db, ctx.config, {
+          userId: user.id,
+          to: user.email,
+          kind: 'password_reset',
+          subject: 'Reset your Flowdeck password',
+          text: `Hi ${user.full_name},\n\nSomeone (hopefully you) asked to reset your Flowdeck password. This link works once, for one hour:\n\n${ctx.config.baseUrl}/setup/${token}\n\nIf you did not ask for this, ignore this email; your password stays the same.\n`,
+        });
+        void ctx.worker.tick();
+      }
+      return { ok: true, message: 'If an account uses that address, a reset link is on its way.' };
+    },
+  );
+
   app.post('/auth/logout', async (req, reply) => {
     if (req.user) await ctx.db.query('DELETE FROM sessions WHERE id = $1', [req.user.session_id]);
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
@@ -95,6 +123,7 @@ export async function authRoutes(app: FastifyInstance, ctx: Ctx) {
       if (typeof prefs.colorBlind === 'boolean') clean.colorBlind = prefs.colorBlind;
       if (typeof prefs.shortcuts === 'boolean') clean.shortcuts = prefs.shortcuts;
       if (typeof prefs.labelNames === 'boolean') clean.labelNames = prefs.labelNames;
+      if (typeof prefs.emailNotifications === 'boolean') clean.emailNotifications = prefs.emailNotifications;
       if (Array.isArray(prefs.mutedNotifications))
         clean.mutedNotifications = [...new Set(prefs.mutedNotifications.filter((k): k is string => (MUTABLE_NOTIFICATIONS as readonly unknown[]).includes(k)))];
     }

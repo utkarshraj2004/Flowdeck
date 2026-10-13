@@ -100,6 +100,7 @@ export function WorkspacePage() {
                   try {
                     const r = await post(`/workspaces/${workspaceId}/invites`, email ? { kind: 'email', email, role: f.get('role') } : { kind: 'link', role: f.get('role') });
                     setInviteUrl(r.invite.url);
+                    if (r.emailed) push({ kind: 'success', text: `Invitation emailed to ${email}` });
                     (e.target as HTMLFormElement).reset();
                     load();
                   } catch (err) {

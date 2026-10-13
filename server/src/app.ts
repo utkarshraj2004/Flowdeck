@@ -26,6 +26,9 @@ import { searchRoutes } from './routes/search.js';
 import { notificationRoutes } from './routes/notifications.js';
 import { adminRoutes } from './routes/admin.js';
 import { wsRoutes } from './routes/ws.js';
+import { automationRoutes } from './routes/automation.js';
+import { webhookRoutes } from './routes/webhooks.js';
+import { Worker } from './lib/worker.js';
 
 export const VERSION = '0.1.0';
 
@@ -33,12 +36,13 @@ export function redactUrl(url: string) {
   return url.replace(/\/(setup|invites?)\/[^/?#]+/g, '/$1/[redacted]');
 }
 
-const PUBLIC_UNSAFE = new Set(['/api/v1/auth/login']);
+const PUBLIC_UNSAFE = new Set(['/api/v1/auth/login', '/api/v1/auth/forgot']);
 
 export async function buildApp(config: Config, opts: { db?: Db; logger?: boolean } = {}): Promise<FastifyInstance & { ctx: Ctx }> {
   const db = opts.db ?? createPool(config.databaseUrl);
   const hub = new Hub(db);
-  const ctx: Ctx = { db, hub, config };
+  const ctx = { db, hub, config } as Ctx;
+  ctx.worker = new Worker(ctx);
   fs.mkdirSync(config.uploadDir, { recursive: true });
 
   const app = Fastify({
@@ -158,6 +162,8 @@ export async function buildApp(config: Config, opts: { db?: Db; logger?: boolean
       await attachmentRoutes(api, ctx);
       await searchRoutes(api, ctx);
       await notificationRoutes(api, ctx);
+      await automationRoutes(api, ctx);
+      await webhookRoutes(api, ctx);
       await adminRoutes(api, ctx);
       await wsRoutes(api, ctx);
     },
@@ -183,7 +189,9 @@ export async function buildApp(config: Config, opts: { db?: Db; logger?: boolean
     });
   }
 
+  ctx.worker.start(config.workerIntervalMs);
   app.addHook('onClose', async () => {
+    await ctx.worker.stop();
     hub.stop();
     if (!opts.db) await db.end();
   });

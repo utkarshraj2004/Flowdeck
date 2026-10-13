@@ -52,6 +52,36 @@ export function AdminPage() {
         </dl>
         <p className="muted small">Backups are taken outside the app; see docs/OPERATIONS.md.</p>
       </section>
+      <section className="panel stack" aria-labelledby="email-title">
+        <h2 id="email-title">Email</h2>
+        {status.email.enabled ? (
+          <>
+            <p>
+              Sending as <code>{status.email.from}</code>. Queued: {status.email.pending}. Failed after retries: {status.email.failed}.
+            </p>
+            {status.email.lastError && <p className="field-error">Last failure: {status.email.lastError}</p>}
+            <button
+              className="btn btn-light"
+              onClick={async () => {
+                try {
+                  const r = await post('/admin/email/test', {});
+                  push({ kind: 'success', text: `Test email sent to ${r.to}` });
+                } catch (e) {
+                  push({ kind: 'error', text: (e as Error).message });
+                }
+                load();
+              }}
+            >
+              Send me a test email
+            </button>
+          </>
+        ) : (
+          <p className="muted">
+            Email is off. Set <code>FLOWDECK_SMTP_URL</code> (and optionally <code>FLOWDECK_MAIL_FROM</code>) to send invitations, password-reset links and notification digests by email. Everything
+            else works without it (docs/OPERATIONS.md).
+          </p>
+        )}
+      </section>
       <section className="panel stack">
         <h2>Users</h2>
         <form

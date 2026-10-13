@@ -65,6 +65,8 @@ export interface BoardState {
   cards: Record<string, Card>;
   watchedListIds: string[];
   watchedCardIds: string[];
+  /** Cards with notifications the current user has not read (unread markers). */
+  unreadCardIds: string[];
 }
 export interface BoardEvent {
   type: 'event';
@@ -87,6 +89,7 @@ export function fromSnapshot(s: any): BoardState {
     cards: Object.fromEntries(s.cards.map((c: Card) => [c.id, c])),
     watchedListIds: s.watchedListIds ?? [],
     watchedCardIds: s.watchedCardIds ?? [],
+    unreadCardIds: s.unreadCardIds ?? [],
   };
 }
 
@@ -171,6 +174,12 @@ export function reduceEvent(s: BoardState, e: BoardEvent): BoardState {
 }
 
 export function describeActivity(item: { type: string; summary: any }, opts: { onCard?: boolean } = {}): string {
+  const text = describeBase(item, opts);
+  // Changes made by an automation rule name the rule, so people can tell them from manual edits.
+  return item.summary?.automation ? `${text} (rule “${item.summary.automation}”)` : text;
+}
+
+function describeBase(item: { type: string; summary: any }, opts: { onCard?: boolean }): string {
   const s = item.summary ?? {};
   const card = opts.onCard ? 'this card' : `“${s.cardName ?? 'a card'}”`;
   switch (item.type) {
@@ -263,6 +272,8 @@ export function describeActivity(item: { type: string; summary: any }, opts: { o
       return `removed attachment ${s.attachmentName} from ${card}`;
     case 'label.deleted':
       return `deleted label “${s.name || s.color}”`;
+    case 'automation.failed':
+      return `triggered rule “${s.ruleName}” on ${card}, but it could not run: ${s.error}. The change itself was saved.`;
     default:
       return item.type;
   }

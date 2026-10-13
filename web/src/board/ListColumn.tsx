@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -50,6 +50,8 @@ export const ListColumn = memo(function ListColumn({
   const { push } = useToasts();
   const canEdit = view.canEdit;
   const sortable = useSortable({ id: `list:${list.id}`, disabled: !canEdit });
+  // Stable while the cards are unchanged, so the cards' sortable context does not re-render every card.
+  const cardItems = useMemo(() => cards.map((c) => `card:${c.id}`), [cards]);
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `listbody:${list.id}` });
   const [composer, setComposer] = useState<false | 'top' | 'bottom'>(false);
   const [renaming, setRenaming] = useState(false);
@@ -129,7 +131,7 @@ export const ListColumn = memo(function ListColumn({
       </div>
       <div ref={setDropRef} className="list-cards">
         {composer === 'top' && <CardComposer listId={list.id} position="top" onClose={() => setComposer(false)} />}
-        <SortableContext items={cards.map((c) => `card:${c.id}`)} strategy={verticalListSortingStrategy} disabled={!canEdit || !!movingCardId}>
+        <SortableContext items={cardItems} strategy={verticalListSortingStrategy} disabled={!canEdit || !!movingCardId}>
           <ol className="cards" aria-label={`Cards in ${list.name}`}>
             {cards.map((c) => (
               <SortableCard key={c.id} card={c} view={view} onKey={onCardKey} onHover={onHover} onAction={onCardAction} moving={movingCardId === c.id} />
