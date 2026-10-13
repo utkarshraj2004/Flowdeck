@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# Flowdeck helper for GitHub Codespaces. Run "flowdeck help".
+set -u
+. "$(dirname "$(readlink -f "$0")")/../env.sh"
+
+usage() {
+  cat <<USAGE
+Flowdeck in this codespace
+
+  flowdeck status                 is it running? which address? what data exists?
+  flowdeck url                    print the private preview address
+  flowdeck admin <email>          create the first administrator; prints a one-time setup link
+  flowdeck reset-link <email>     print a one-time password-reset (or unused setup) link
+  flowdeck logs                   follow the server log (Ctrl+C to stop following)
+  flowdeck restart [--rebuild]    restart the server (rebuild after pulling or editing code)
+  flowdeck stop                   stop the server (data is kept)
+
+The preview address only works for you, in a browser signed in to GitHub.
+USAGE
+}
+
+server_running() { [ -f "$RUN_DIR/server.pid" ] && kill -0 "$(cat "$RUN_DIR/server.pid")" 2>/dev/null; }
+supervisor_running() { [ -f "$RUN_DIR/supervisor.pid" ] && kill -0 "$(cat "$RUN_DIR/supervisor.pid")" 2>/dev/null; }
+
+ready() {
+  node -e 'fetch("http://127.0.0.1:" + process.env.PORT + "/readyz").then(r => r.json()).then(j => { console.log(JSON.stringify(j)); process.exit(j.ok ? 0 : 1) }, () => process.exit(1))' 2>/dev/null
+}
+
+need_build() {
+  if [ ! -f "$FLOWDECK_ROOT/dist/server/cli.js" ]; then
+    echo "Flowdeck is still being installed or built. Wait for 'flowdeck status' to say running, then try again." >&2
+    exit 1
+  fi
+  if ! fd_load_database_url; then
+    echo "The database has not been initialised yet. Wait a minute and try again (see 'flowdeck status')." >&2
+    exit 1
+  fi
+}
+
+stop_all() {
+  if supervisor_running; then
+    kill -TERM -- "-$(cat "$RUN_DIR/supervisor.pid")" 2>/dev/null || kill -TERM "$(cat "$RUN_DIR/supervisor.pid")"
+    for _ in $(seq 1 30); do supervisor_running || break; sleep 0.5; done
+  fi
+  if server_running; then kill -TERM "$(cat "$RUN_DIR/server.pid")" 2>/dev/null; fi
+  rm -f "$RUN_DIR/server.pid" "$RUN_DIR/supervisor.pid"
+}
+
+cmd="${1:-help}"
+case "$cmd" in
+  url)
+    echo "$FLOWDECK_BASE_URL"
+    ;;
+  status)
+    echo "Preview address: $FLOWDECK_BASE_URL"
+    case "$FLOWDECK_BASE_URL" in http://localhost*) echo "  (not running in GitHub Codespaces, so this address is only reachable inside this machine)";; esac
+    echo "Supervisor:      $(supervisor_running && echo running || echo 'not running (start it with: flowdeck restart)')"
+    echo "Phase:           $(cat "$RUN_DIR/phase" 2>/dev/null || echo unknown)"
+    if r="$(ready)"; then echo "Server:          ready $r"; else echo "Server:          not ready yet (see: flowdeck logs)"; fi
+    if [ -f "$FLOWDECK_ROOT/dist/server/cli.js" ] && fd_load_database_url; then
+      (cd "$FLOWDECK_ROOT" && node dist/server/cli.js status 2>/dev/null | sed 's/^/Database:        /')
+    fi
+    ;;
+  admin)
+    email="${2:-}"
+    if [ -z "$email" ]; then echo "Usage: flowdeck admin you@example.com" >&2; exit 1; fi
+    need_build
+    cd "$FLOWDECK_ROOT" && node dist/server/cli.js admin create --email "$email"
+    echo "Use the link in this codespace's browser session; it works once and expires in 24 hours."
+    ;;
+  reset-link)
+    email="${2:-}"
+    if [ -z "$email" ]; then echo "Usage: flowdeck reset-link you@example.com" >&2; exit 1; fi
+    need_build
+    cd "$FLOWDECK_ROOT" && node dist/server/cli.js admin reset-link --email "$email"
+    ;;
+  logs)
+    touch "$LOG_FILE"; tail -n 100 -f "$LOG_FILE"
+    ;;
+  restart)
+    [ "${2:-}" = "--rebuild" ] && { mkdir -p "$RUN_DIR"; touch "$RUN_DIR/rebuild"; }
+    stop_all
+    bash "$FLOWDECK_ROOT/.devcontainer/start.sh"
+    ;;
+  stop)
+    stop_all
+    echo "stopped" >"$RUN_DIR/phase"
+    echo "Flowdeck stopped. Your data is kept. Start it again with: flowdeck restart"
+    ;;
+  help|-h|--help) usage ;;
+  *) usage; exit 1 ;;
+esac

@@ -1,3 +1,5 @@
+> **Reference material, not product documentation.** This folder is the research and specification Flowdeck was built from (observations of Trello, proposals, test plan). It is kept for traceability. Flowdeck's *actual* behaviour and status are documented in the [main README](../README.md), [docs/IMPLEMENTATION-CHECKLIST.md](../docs/IMPLEMENTATION-CHECKLIST.md) and [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md). Statements below such as "nothing has been implemented" describe the time of the research.
+
 # Flowdeck research: Trello-equivalent specification
 
 Research and preparation only. No application code was built and `site/` was not changed.

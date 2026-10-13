@@ -1,0 +1,8 @@
+# Reverse proxy with automatic HTTPS. For a public DNS name Caddy obtains a
+# certificate automatically. For a LAN-only name, uncomment `tls internal`
+# (browsers will then need Caddy's local CA to be trusted).
+{$FLOWDECK_DOMAIN} {
+	# tls internal
+	encode gzip
+	reverse_proxy app:8080
+}

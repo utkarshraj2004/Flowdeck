@@ -3,14 +3,30 @@ on:
   pull_request:
   push:
     branches: [main]
-  workflow_call:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  validate:
+  test:
+    name: Typecheck, API tests, build, browser tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: flowdeck
+          POSTGRES_PASSWORD: flowdeck
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U flowdeck -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://flowdeck:flowdeck@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -18,6 +34,26 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run validate
-      - run: npx playwright-core install --with-deps chromium
-      - run: npm run test:browser
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7
+
+  docker:
+    name: Docker Compose smoke (build, restart, backup, restore)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: node scripts/compose-smoke.mjs

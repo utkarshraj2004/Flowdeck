@@ -1,0 +1,59 @@
+# Flowdeck on one server: app + PostgreSQL, with persistent named volumes.
+# Configure with a .env file next to this file (copy .env.example). See docs/OPERATIONS.md.
+name: flowdeck
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: flowdeck
+      POSTGRES_USER: flowdeck
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flowdeck -d flowdeck"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    image: flowdeck:local
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://flowdeck:${POSTGRES_PASSWORD}@db:5432/flowdeck
+      FLOWDECK_BASE_URL: ${FLOWDECK_BASE_URL:?Set FLOWDECK_BASE_URL in .env, e.g. http://192.168.1.20:8080}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
+      FLOWDECK_COOKIE_SECURE: ${FLOWDECK_COOKIE_SECURE:-}
+      FLOWDECK_TRUST_PROXY: ${FLOWDECK_TRUST_PROXY:-false}
+    ports:
+      - "${FLOWDECK_PORT:-8080}:8080"
+    volumes:
+      - uploads:/data
+
+  # Optional HTTPS in front of the app: `docker compose --profile https up -d`.
+  # Needs FLOWDECK_DOMAIN in .env and FLOWDECK_TRUST_PROXY=true. See docs/OPERATIONS.md.
+  caddy:
+    image: caddy:2
+    profiles: ["https"]
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      FLOWDECK_DOMAIN: ${FLOWDECK_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+
+volumes:
+  db-data:
+  uploads:
+  caddy-data:

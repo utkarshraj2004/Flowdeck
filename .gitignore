@@ -21,3 +21,12 @@ Thumbs.db
 
 # Local Claude Code overrides
 .claude/settings.local.json
+
+# Flowdeck runtime data and build output
+data/
+backups/
+*.dump
+web/dist/
+
+# GitHub Codespaces runtime data (database, uploads, generated secrets, logs)
+.codespace-data/
