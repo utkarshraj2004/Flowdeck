@@ -1,7 +1,10 @@
 import type { Db, Tx } from '../db.js';
 import { withTx } from '../db.js';
 import { boardAccess } from './permissions.js';
+import { MUTABLE_NOTIFICATIONS } from './constants.js';
 import type { EventMsg, Hub } from './hub.js';
+import { runAutomations } from './automation.js';
+import { enqueueWebhooks } from './webhooks.js';
 
 export interface NotificationOut {
   id: string;
@@ -23,6 +26,8 @@ export class Mutation {
   events: EventMsg[] = [];
   notifications: NotificationOut[] = [];
   recheck = new Set<string>();
+  /** Set by the automation worker: its own changes do not trigger further rules. */
+  skipAutomation = false;
   private locked = new Set<string>();
 
   constructor(
@@ -79,6 +84,11 @@ export class Mutation {
       if (!uid || uid === this.actorId || seen.has(uid)) continue;
       seen.add(uid);
       if (ctx.boardId && !(await boardAccess(this.tx, uid, ctx.boardId))) continue;
+      // Respect the recipient's notification settings (access changes are never mutable).
+      if ((MUTABLE_NOTIFICATIONS as readonly string[]).includes(kind)) {
+        const muted = await this.tx.query(`SELECT 1 FROM users WHERE id = $1 AND prefs->'mutedNotifications' ? $2`, [uid, kind]);
+        if (muted.rowCount) continue;
+      }
       const r = await this.tx.query(
         `INSERT INTO notifications (user_id, kind, actor_id, board_id, card_id, data) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, created_at`,
         [uid, kind, this.actorId, ctx.boardId, ctx.cardId ?? null, ctx.data ?? {}],
@@ -114,7 +124,11 @@ export async function runMutation<T>(
   let m!: Mutation;
   const data = await withTx(deps.db, async (tx) => {
     m = new Mutation(tx, actorId, clientMutationId);
-    return fn(m);
+    const result = await fn(m);
+    // Same transaction: automation actions and webhook deliveries commit together with the change.
+    if (!m.skipAutomation) await runAutomations(m, [...m.events]);
+    await enqueueWebhooks(tx, m.events);
+    return result;
   });
   for (const e of m.events) deps.hub.publish(e);
   if (m.notifications.length) {

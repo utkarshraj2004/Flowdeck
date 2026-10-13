@@ -20,6 +20,15 @@ export interface Config {
   trustProxy: boolean;
   webDir: string;
   sessionDays: number;
+  /** Optional SMTP server (smtp:// or smtps:// URL). Without it, every email feature is off and in-app flows still work. */
+  smtpUrl: string | null;
+  mailFrom: string;
+  /** Minutes an unread notification waits before it goes into an email digest (users opt in). */
+  emailDigestMinutes: number;
+  /** Allow webhooks to private, loopback and link-local addresses (off by default: protects internal services). */
+  webhookAllowPrivate: boolean;
+  /** Background worker interval (webhook and email delivery, due-soon automation). 0 disables the timer. */
+  workerIntervalMs: number;
 }
 
 export function loadConfig(overrides: Partial<Config> = {}): Config {
@@ -39,6 +48,11 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
     trustProxy: process.env.FLOWDECK_TRUST_PROXY === 'true',
     webDir: path.resolve(process.env.FLOWDECK_WEB_DIR || './dist/web'),
     sessionDays: int('SESSION_DAYS', 30),
+    smtpUrl: process.env.FLOWDECK_SMTP_URL || null,
+    mailFrom: process.env.FLOWDECK_MAIL_FROM || `Flowdeck <flowdeck@${new URL(baseUrl).hostname}>`,
+    emailDigestMinutes: int('FLOWDECK_EMAIL_DIGEST_MINUTES', 15),
+    webhookAllowPrivate: process.env.FLOWDECK_WEBHOOK_ALLOW_PRIVATE === 'true',
+    workerIntervalMs: process.env.FLOWDECK_WORKER_INTERVAL_MS === '0' ? 0 : int('FLOWDECK_WORKER_INTERVAL_MS', 5000),
     ...overrides,
   };
   if (overrides.dataDir && !overrides.uploadDir) cfg.uploadDir = path.join(overrides.dataDir, 'uploads');

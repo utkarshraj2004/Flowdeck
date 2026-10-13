@@ -30,6 +30,7 @@ export interface Card {
   dueComplete: boolean;
   cover: { color?: string; attachmentId?: string } | null;
   archivedAt: string | null;
+  isTemplate?: boolean;
   labelIds: string[];
   memberIds: string[];
   badges: { description: boolean; comments: number; attachments: number; checkItems: number; checkItemsChecked: number };
@@ -52,6 +53,7 @@ export interface Board {
   closedAt: string | null;
   starred?: boolean;
   watching?: boolean;
+  isTemplate?: boolean;
 }
 export interface BoardState {
   board: Board;
@@ -62,6 +64,9 @@ export interface BoardState {
   lists: Record<string, List>;
   cards: Record<string, Card>;
   watchedListIds: string[];
+  watchedCardIds: string[];
+  /** Cards with notifications the current user has not read (unread markers). */
+  unreadCardIds: string[];
 }
 export interface BoardEvent {
   type: 'event';
@@ -83,10 +88,12 @@ export function fromSnapshot(s: any): BoardState {
     lists: Object.fromEntries(s.lists.map((l: List) => [l.id, l])),
     cards: Object.fromEntries(s.cards.map((c: Card) => [c.id, c])),
     watchedListIds: s.watchedListIds ?? [],
+    watchedCardIds: s.watchedCardIds ?? [],
+    unreadCardIds: s.unreadCardIds ?? [],
   };
 }
 
-const byPos = (a: { position: string; id: string }, b: { position: string; id: string }) =>
+export const byPos = (a: { position: string; id: string }, b: { position: string; id: string }) =>
   a.position < b.position ? -1 : a.position > b.position ? 1 : a.id < b.id ? -1 : 1;
 
 export function sortedLists(s: BoardState) {
@@ -167,6 +174,12 @@ export function reduceEvent(s: BoardState, e: BoardEvent): BoardState {
 }
 
 export function describeActivity(item: { type: string; summary: any }, opts: { onCard?: boolean } = {}): string {
+  const text = describeBase(item, opts);
+  // Changes made by an automation rule name the rule, so people can tell them from manual edits.
+  return item.summary?.automation ? `${text} (rule “${item.summary.automation}”)` : text;
+}
+
+function describeBase(item: { type: string; summary: any }, opts: { onCard?: boolean }): string {
   const s = item.summary ?? {};
   const card = opts.onCard ? 'this card' : `“${s.cardName ?? 'a card'}”`;
   switch (item.type) {
@@ -202,6 +215,10 @@ export function describeActivity(item: { type: string; summary: any }, opts: { o
       return `moved list “${s.name}” here from board “${s.fromBoard}”`;
     case 'list.cards_archived':
       return `archived all ${s.count} card(s) in “${s.name}”`;
+    case 'list.cards_sorted':
+      return `sorted the cards in “${s.name}” by ${({ name: 'name', due: 'due date', newest: 'newest first', oldest: 'oldest first' } as Record<string, string>)[s.by] ?? s.by}`;
+    case 'check_item.converted':
+      return `turned the checklist item “${s.itemName}” into card #${s.newCardNumber}`;
     case 'list.cards_moved':
       return `moved ${s.count} card(s) from “${s.from}” to “${s.to}”`;
     case 'card.created':
@@ -255,6 +272,8 @@ export function describeActivity(item: { type: string; summary: any }, opts: { o
       return `removed attachment ${s.attachmentName} from ${card}`;
     case 'label.deleted':
       return `deleted label “${s.name || s.color}”`;
+    case 'automation.failed':
+      return `triggered rule “${s.ruleName}” on ${card}, but it could not run: ${s.error}. The change itself was saved.`;
     default:
       return item.type;
   }

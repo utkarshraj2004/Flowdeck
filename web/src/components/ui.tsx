@@ -1,5 +1,4 @@
-import MarkdownIt from 'markdown-it';
-import { useMemo, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 export function Avatar({ user, size = 28, title }: { user: { fullName: string; initials: string; id?: string } | null | undefined; size?: number; title?: string }) {
   if (!user) return null;
@@ -30,20 +29,6 @@ export function Logo() {
   );
 }
 
-// Raw HTML is disabled; markdown-it's link validator rejects javascript:/vbscript:/data: URLs.
-const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
-const defaultLink = md.renderer.rules.link_open ?? ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options));
-md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
-  tokens[idx].attrSet('target', '_blank');
-  tokens[idx].attrSet('rel', 'noopener noreferrer nofollow');
-  return defaultLink(tokens, idx, options, env, self);
-};
-
-export function Markdown({ source, className = '' }: { source: string; className?: string }) {
-  const html = useMemo(() => md.render(source), [source]);
-  return <div className={`markdown ${className}`} dangerouslySetInnerHTML={{ __html: html }} />;
-}
-
 export function Spinner({ label = 'Loading' }: { label?: string }) {
   return (
     <div className="spinner" role="status">
@@ -61,7 +46,19 @@ export function EmptyState({ title, children }: { title: string; children?: Reac
   );
 }
 
-export const LABEL_COLORS = ['green', 'yellow', 'orange', 'red', 'purple', 'blue', 'sky', 'lime', 'pink', 'black'] as const;
+export const LABEL_HUES = ['green', 'yellow', 'orange', 'red', 'purple', 'blue', 'sky', 'lime', 'pink', 'black'] as const;
+/**
+ * 30 label colours in palette-grid order for a 5-column grid: for each group of five hues, a row of
+ * subtle shades, a row of normal shades and a row of bold shades.
+ */
+export const LABEL_COLORS = [LABEL_HUES.slice(0, 5), LABEL_HUES.slice(5)].flatMap((g) => [...g.map((h) => `${h}_subtle`), ...g, ...g.map((h) => `${h}_bold`)]);
+const HUE_NAMES: Record<string, string> = { black: 'grey' };
+/** Accessible colour name, e.g. "bold red", "subtle grey". */
+export function colorName(c: string | null) {
+  if (!c) return 'no colour';
+  const [hue, shade] = c.split('_');
+  return `${shade ? `${shade} ` : ''}${HUE_NAMES[hue] ?? hue}`;
+}
 export const BACKGROUNDS = ['ocean', 'forest', 'sunset', 'berry', 'slate', 'sand', 'teal', 'plum'] as const;
 
 export function LabelChip({ label, showName = true }: { label: { name: string; color: string | null }; showName?: boolean }) {
@@ -85,11 +82,19 @@ export function dueState(dueAt: string | null, complete: boolean, now = Date.now
 
 export const DUE_TEXT: Record<string, string> = { complete: 'Complete', 'overdue-long': 'Overdue', overdue: 'Overdue', soon: 'Due soon', later: 'Due' };
 
+// Creating an Intl formatter is expensive; large boards format thousands of dates, so reuse them.
+const formatters = new Map<string, Intl.DateTimeFormat>();
 export function formatDate(iso: string | null, withTime = true) {
   if (!iso) return '';
   const d = new Date(iso);
   const sameYear = d.getFullYear() === new Date().getFullYear();
-  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }), ...(withTime ? { hour: 'numeric', minute: '2-digit' } : {}) });
+  const key = `${sameYear}:${withTime}`;
+  let f = formatters.get(key);
+  if (!f) {
+    f = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }), ...(withTime ? { hour: 'numeric', minute: '2-digit' } : {}) });
+    formatters.set(key, f);
+  }
+  return f.format(d);
 }
 
 export function timeAgo(iso: string) {

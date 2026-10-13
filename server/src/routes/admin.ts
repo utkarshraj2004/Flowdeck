@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { auth, type Ctx } from '../context.js';
 import { many, one, withTx } from '../db.js';
-import { conflict, forbidden, invalid, notFound } from '../lib/errors.js';
+import { conflict, forbidden, HttpError, invalid, notFound } from '../lib/errors.js';
+import { mailEnabled, sendNow } from '../lib/mail.js';
 import { createUserToken } from '../lib/tokens.js';
 import { randomToken } from '../lib/security.js';
 import * as v from '../lib/validate.js';
@@ -25,7 +26,18 @@ export async function adminRoutes(app: FastifyInstance, ctx: Ctx) {
               (SELECT count(*) FROM cards)::int AS cards, (SELECT COALESCE(sum(bytes), 0) FROM attachments)::bigint AS upload_bytes,
               (SELECT max(version) FROM schema_migrations)::int AS schema`,
     );
-    return { version: VERSION, schema: counts.schema, latestSchema: LATEST_SCHEMA(), counts: { ...counts, upload_bytes: Number(counts.upload_bytes) }, maxUploadBytes: ctx.config.maxUploadBytes, baseUrl: ctx.config.baseUrl };
+    const mail = await one(db, `SELECT count(*) FILTER (WHERE status = 'pending')::int AS pending, count(*) FILTER (WHERE status = 'failed')::int AS failed FROM email_outbox`);
+    const lastFail = await one(db, `SELECT last_error FROM email_outbox WHERE status = 'failed' ORDER BY id DESC LIMIT 1`);
+    return {
+      version: VERSION,
+      schema: counts.schema,
+      latestSchema: LATEST_SCHEMA(),
+      counts: { ...counts, upload_bytes: Number(counts.upload_bytes) },
+      maxUploadBytes: ctx.config.maxUploadBytes,
+      baseUrl: ctx.config.baseUrl,
+      email: { enabled: mailEnabled(ctx.config), from: ctx.config.mailFrom, pending: mail.pending, failed: mail.failed, lastError: lastFail?.last_error ?? null },
+      webhooks: { allowPrivate: ctx.config.webhookAllowPrivate },
+    };
   });
 
   app.get('/admin/users', async (req) => {
@@ -80,6 +92,18 @@ export async function adminRoutes(app: FastifyInstance, ctx: Ctx) {
     });
     if (disabled) await ctx.hub.recheckUserBoards(userId);
     return { ok: true };
+  });
+
+  // Send a test email straight away and report the SMTP server's answer (errors are shown, never swallowed).
+  app.post('/admin/email/test', async (req) => {
+    const me = sysadmin(req);
+    const to = v.email({ email: (v.body(req.body).to as string | undefined) ?? me.email });
+    try {
+      await sendNow(ctx.config, to, 'Flowdeck test email', `This is a test email from Flowdeck at ${ctx.config.baseUrl}.\nIf you can read this, email is set up correctly.\n`);
+    } catch (err) {
+      throw new HttpError(502, 'email_failed', `Sending failed: ${(err as Error).message}`);
+    }
+    return { ok: true, to };
   });
 
   app.post('/admin/users/:userId/reset-link', async (req) => {

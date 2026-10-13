@@ -14,6 +14,8 @@ How to install, configure, secure, back up, restore and upgrade a self-hosted Fl
 - [Upgrades and rollback](#upgrades-and-rollback)
 - [Health and logs](#health-and-logs)
 - [Limits](#limits)
+- [Email](#email)
+- [Webhooks and automation](#webhooks-and-automation)
 - [Troubleshooting](#troubleshooting)
 
 ## Install
@@ -55,6 +57,11 @@ Settings come from `.env`, which is never committed to git. Only these variables
 | `FLOWDECK_TRUST_PROXY` | no | `false` | Set `true` only behind a reverse proxy you control (e.g. the `https` profile), so client IPs are read from `X-Forwarded-For`. |
 | `FLOWDECK_COOKIE_SECURE` | no | automatic | Session cookies are `Secure` when `FLOWDECK_BASE_URL` starts with `https://`. Override with `true`/`false` only if you must. |
 | `FLOWDECK_DOMAIN` | only for `https` | — | DNS name Caddy serves. |
+| `FLOWDECK_SMTP_URL` | no | empty (email off) | Your SMTP server, e.g. `smtp://user:password@mail.example.com:587` (`smtps://` for port 465). See [Email](#email). |
+| `FLOWDECK_MAIL_FROM` | no | `Flowdeck <flowdeck@HOST>` | Sender of Flowdeck's emails. |
+| `FLOWDECK_EMAIL_DIGEST_MINUTES` | no | `15` | How long a notification stays unread before it goes into an opt-in digest email. |
+| `FLOWDECK_WEBHOOK_ALLOW_PRIVATE` | no | `false` | Allow webhooks to private, loopback and LAN addresses. See [Webhooks](#webhooks-and-automation). |
+| `FLOWDECK_LIMIT_*` | no | see [Limits](#limits) | Object limits. |
 
 Internal variables that Compose and the image set for you are `DATABASE_URL`, `PORT`, `FLOWDECK_DATA_DIR` and `FLOWDECK_WEB_DIR`. Outside Docker, `SESSION_DAYS` (default 30) controls how long a login lasts.
 
@@ -174,15 +181,41 @@ Rollback: check out the previous version and run `scripts/restore.sh <backup tak
 
 ## Limits
 
-These are per-instance defaults, built in:
-- 5,000 open cards per board;
-- 475 open lists per board;
-- 950 labels per board;
-- 50 checklists per card, 200 items per checklist;
-- 100 attachments per card;
-- `MAX_UPLOAD_MB` per file.
+Defaults, each changeable in `.env` (a whole number, then `docker compose up -d`):
+
+| Limit | Default | Variable |
+|---|---:|---|
+| Open cards per board | 5,000 | `FLOWDECK_LIMIT_OPEN_CARDS_PER_BOARD` |
+| Open lists per board | 475 | `FLOWDECK_LIMIT_OPEN_LISTS_PER_BOARD` |
+| Labels per board | 950 | `FLOWDECK_LIMIT_LABELS_PER_BOARD` |
+| Checklists per card | 50 | `FLOWDECK_LIMIT_CHECKLISTS_PER_CARD` |
+| Items per checklist | 200 | `FLOWDECK_LIMIT_ITEMS_PER_CHECKLIST` |
+| Attachments per card | 100 | `FLOWDECK_LIMIT_ATTACHMENTS_PER_CARD` |
+| Size of one uploaded file | 25 MB | `MAX_UPLOAD_MB` |
+
+An invalid value stops the app at start with a message naming the variable. Very large boards get slower in the browser (see `docs/perf/RESULTS.md`).
+
+Automation: at most 50 rules per board and 5 actions per rule. Webhooks: at most 10 per board.
 
 Login is limited to 5 attempts per minute per IP and account.
+
+## Email
+
+Email is **optional**. Without `FLOWDECK_SMTP_URL` nothing is sent and every flow still works: invite links are shared by hand and administrators create password-reset links.
+
+With an SMTP server you configure (your provider, company mail server or a self-hosted relay; Flowdeck needs no paid service):
+- **Password reset by email:** "Forgot your password?" appears on the sign-in page. The answer never reveals whether an account exists; links work once, for one hour.
+- **Invitations:** an invitation for an email address is also emailed (the link is still shown, so it can be shared by hand).
+- **Digests:** people who tick "Email me unread notifications" (Account → Notifications) get one email listing notifications they have not read after `FLOWDECK_EMAIL_DIGEST_MINUTES`. Each notification is emailed once.
+
+Messages go through an outbox in the database and are sent by the background worker, with retries after 1, 5, 30 and 120 minutes. **Administration → Email** shows queued and failed messages, the last error and a "Send me a test email" button that reports the server's answer. Put SMTP credentials only in `.env` (never commit it).
+
+## Webhooks and automation
+
+Both run inside the Flowdeck process; no extra service is needed.
+
+- **Automation** (board menu → Automation, board admins): "when a card is added to / moved into a list, marked complete, or due within N hours, then move / label / assign / complete / set a due date / archive". Card rules run inside the change that triggers them; "due soon" rules run from the background worker (every few seconds), once per card and due date. A rule that cannot run (for example its label was deleted) is shown with its error on the rule and in the activity; the triggering change is still saved. Rules never trigger other rules.
+- **Webhooks** (board menu → Webhooks, board admins): a signed JSON `POST` per board event. Verify `X-Flowdeck-Signature: sha256=<hex>`, the HMAC-SHA256 of `<X-Flowdeck-Timestamp>.<body>` with the webhook's secret (shown once; rotate it any time). Failed deliveries are retried after 30 s, 2 min, 10 min, 1 h and 6 h, then marked failed and can be retried from the delivery log. Redirects are not followed. Addresses on private networks (10.x, 192.168.x, 127.x, …) are refused unless `FLOWDECK_WEBHOOK_ALLOW_PRIVATE=true`, which protects internal services from being probed by board admins.
 
 ## Troubleshooting
 
@@ -196,5 +229,7 @@ Login is limited to 5 attempts per minute per IP and account.
 | `toomanyrequests` / rate limit pulling images | Docker Hub limits anonymous pulls. Log in (`docker login`), or use a registry mirror (Docker daemon `registry-mirrors`, for example `https://mirror.gcr.io`). |
 | `npm ci` fails during `docker compose build` with `SELF_SIGNED_CERT_IN_CHAIN` | Your network inspects TLS. Build with your proxy's CA certificate: `docker build --secret id=extra_ca,src=/path/to/ca.pem -t flowdeck:local .`, then `docker compose up -d`. |
 | App restarts with "schema version … is newer than this Flowdeck build" | The database was upgraded by a newer Flowdeck. Run that version, or restore a backup that matches this one. |
+| Emails are not arriving | Administration → Email shows the last SMTP error. Check `FLOWDECK_SMTP_URL` (user, password, port, `smtp://` vs `smtps://`), then "Send me a test email". |
+| A webhook stays "retrying" | Open its delivery log: the result column shows the HTTP status or connection error. "refused private address" means the URL points into your network; set `FLOWDECK_WEBHOOK_ALLOW_PRIVATE=true` if that is intended. |
 | "File is larger than N MB" | Raise `MAX_UPLOAD_MB` in `.env` (and your proxy's body limit), then `docker compose up -d`. |
 | Lost the only administrator password | `docker compose exec app node dist/server/cli.js admin reset-link --email <their email>` |

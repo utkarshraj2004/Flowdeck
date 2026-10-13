@@ -19,6 +19,7 @@ export const boardJson = (b: BoardRow & { starred?: boolean }) => ({
   background: b.background,
   prefs: b.prefs,
   closedAt: b.closed_at,
+  isTemplate: !!b.is_template,
   seq: Number(b.last_seq),
   ...(b.starred !== undefined ? { starred: b.starred } : {}),
 });
@@ -36,7 +37,7 @@ export const labelJson = (l: any) => ({ id: l.id, boardId: l.board_id, name: l.n
 
 const CARD_FRONT_SQL = `
   SELECT c.id, c.board_id, c.list_id, c.number, c.name, c.position, c.start_at, c.due_at, c.due_complete,
-         c.cover, c.archived_at, c.version, c.updated_at,
+         c.cover, c.archived_at, c.version, c.updated_at, c.is_template,
          (c.description <> '') AS has_description,
          COALESCE((SELECT array_agg(label_id ORDER BY label_id) FROM card_labels WHERE card_id = c.id), '{}') AS label_ids,
          COALESCE((SELECT array_agg(user_id ORDER BY user_id) FROM card_members WHERE card_id = c.id), '{}') AS member_ids,
@@ -59,6 +60,7 @@ export const cardFrontJson = (c: any) => ({
   cover: c.cover,
   archivedAt: c.archived_at,
   version: c.version,
+  isTemplate: !!c.is_template,
   labelIds: c.label_ids,
   memberIds: c.member_ids,
   badges: {

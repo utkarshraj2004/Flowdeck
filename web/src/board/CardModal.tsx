@@ -1,16 +1,49 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { ApiError, del, get, patch, post, put } from '../api';
 import { useAuth } from '../auth';
 import { realtime } from '../realtime';
 import { ConfirmDialog, Modal } from '../components/Modal';
+import { MenuItems, Popover, usePopover } from '../components/Popover';
+import {
+  Activity,
+  Archive,
+  ArrowRight,
+  ChevronDown,
+  Circle,
+  CircleCheck,
+  Clock,
+  Copy,
+  Ellipsis,
+  Eye,
+  Image,
+  LayoutTemplate,
+  Link,
+  MessageSquare,
+  Paperclip,
+  Plus,
+  RotateCcw,
+  SquareCheck,
+  Tag,
+  TextAlignStart,
+  Trash2,
+  Users,
+  X,
+} from '../components/icons';
 import { useToasts } from '../components/Toasts';
-import { Avatar, bytes, DUE_TEXT, dueState, formatDate, LABEL_COLORS, LabelChip, Markdown, timeAgo } from '../components/ui';
+import { Avatar, bytes, DUE_TEXT, dueState, formatDate, LabelChip, timeAgo } from '../components/ui';
+import { Markdown } from '../components/Markdown';
+import { copyText } from '../components/clipboard';
 import { useBoard } from './context';
 import { describeActivity, type BoardEvent } from './store';
+import { AttachmentPicker, ChecklistPicker, CopyCardPicker, CoverPicker, DatesPicker, LabelsPicker, MembersPicker, MoveCardPicker } from './pickers';
 
 type Detail = any;
-type Panel = null | 'members' | 'labels' | 'dates' | 'checklist' | 'attachment' | 'cover' | 'move' | 'copy';
+type Pop = 'add' | 'labels' | 'dates' | 'checklist' | 'members' | 'attachment' | 'cover' | 'move' | 'copy' | 'actions';
+type Act = (fn: () => Promise<any>, ok?: string, optimistic?: (c: Detail) => Detail) => Promise<any>;
 
 /**
  * Card detail dialog. Unsaved edits are handled explicitly: drafts are never
@@ -20,25 +53,32 @@ type Panel = null | 'members' | 'labels' | 'dates' | 'checklist' | 'attachment' 
  * (research J07.9, J08.10, J08.11).
  */
 export function CardModal({ number, onClose }: { number: number; onClose: () => void }) {
-  const { state, onEvent, run } = useBoard();
+  const { state, onEvent, run, setWatching, patchCard } = useBoard();
   const { push } = useToasts();
   const nav = useNavigate();
-  const [card, setCard] = useState<Detail | null>(null);
+  const location = useLocation();
+  const intent = (location.state ?? {}) as { edit?: 'title'; open?: 'checklist' };
+  const [detail, setCard] = useState<Detail | null>(null);
   const [missing, setMissing] = useState(false);
   const [gone, setGone] = useState<null | { by: string; moved?: boolean }>(null);
-  const [panel, setPanel] = useState<Panel>(null);
+  const pop = usePopover<Pop>();
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirm, setConfirm] = useState<null | { title: string; body: string; label: string; run: () => void }>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const drafts = useRef<Record<string, string>>({});
   const lastEditor = useRef<Record<string, string>>({});
+  const checklistBtn = useRef<HTMLButtonElement>(null);
   const can = state.access.can;
   const memberName = (id: string | null) => state.members.find((m) => m.id === id)?.fullName ?? 'Someone';
 
+  // Responses can arrive out of order; only the newest request may update the dialog.
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
+    const mine = ++loadSeq.current;
     try {
       const r = await get(`/boards/${state.board.id}/cards/${number}`);
+      if (mine !== loadSeq.current) return;
       setCard(r.card);
       document.title = `${r.card.name} · ${state.board.name} · Flowdeck`;
     } catch (e) {
@@ -50,8 +90,18 @@ export function CardModal({ number, onClose }: { number: number; onClose: () => 
   useEffect(() => {
     load();
   }, [load]);
+  // Several events for this card in one burst (own action echo + websocket) cause one refresh, not one each.
+  const loadTimer = useRef<number | undefined>(undefined);
+  const loadSoon = useCallback(() => {
+    if (loadTimer.current !== undefined) return;
+    loadTimer.current = window.setTimeout(() => {
+      loadTimer.current = undefined;
+      load();
+    }, 0);
+  }, [load]);
+  useEffect(() => () => window.clearTimeout(loadTimer.current), []);
 
-  const cardId = card?.id;
+  const cardId = detail?.id;
   useEffect(() => {
     if (!cardId) return;
     return onEvent((e: BoardEvent) => {
@@ -60,10 +110,27 @@ export function CardModal({ number, onClose }: { number: number; onClose: () => 
       if (e.event === 'card.deleted') return setGone({ by: memberName(e.actor) });
       if (e.event === 'card.moved_out') return setGone({ by: memberName(e.actor), moved: true });
       if (e.event === 'card.updated') for (const f of e.data.changed ?? []) lastEditor.current[f] = memberName(e.actor);
-      load();
+      loadSoon();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cardId, onEvent, load]);
+  }, [cardId, onEvent, loadSoon]);
+
+  // Seeing the card reads its notifications (clears the unread marker here and in the bell), also when
+  // a new notification about it arrives while the dialog is open.
+  const isUnread = !!cardId && state.unreadCardIds.includes(cardId);
+  useEffect(() => {
+    if (!isUnread || !cardId) return;
+    post('/notifications/read', { cardId }).catch(() => undefined); // the marker stays and the next open retries
+  }, [isUnread, cardId]);
+
+  // Opened with a shortcut from the board (`-` adds a checklist).
+  const openedChecklist = useRef(false);
+  useEffect(() => {
+    if (detail && intent.open === 'checklist' && !openedChecklist.current && checklistBtn.current) {
+      openedChecklist.current = true;
+      pop.show('checklist', checklistBtn.current);
+    }
+  }, [detail, intent.open, pop]);
 
   const dirty = () => Object.values(drafts.current).some((d) => d.trim() !== '');
   useEffect(() => {
@@ -82,7 +149,7 @@ export function CardModal({ number, onClose }: { number: number; onClose: () => 
         <div className="modal-body">This card doesn’t exist on this board, or it was deleted.</div>
       </Modal>
     );
-  if (!card)
+  if (!detail)
     return (
       <Modal title="Loading card" onClose={onClose} className="card-modal">
         <div className="modal-body">
@@ -92,14 +159,23 @@ export function CardModal({ number, onClose }: { number: number; onClose: () => 
       </Modal>
     );
 
+  // The board copy of the card front is updated optimistically and by every event: prefer it for the fields it has.
+  const front = state.cards[detail.id];
+  const card: Detail = front
+    ? { ...detail, name: front.name, listId: front.listId, labelIds: front.labelIds, memberIds: front.memberIds, startAt: front.startAt, dueAt: front.dueAt, dueComplete: front.dueComplete, cover: front.cover, isTemplate: front.isTemplate }
+    : detail;
+  const watching = front ? state.watchedCardIds.includes(card.id) : card.watching;
+  const listName = state.lists[card.listId]?.name ?? card.list?.name;
   const editable = can.edit && !card.archivedAt && !gone;
   const labels = state.labels.filter((l) => card.labelIds.includes(l.id));
   const members = state.members.filter((m) => card.memberIds.includes(m.id));
   const ds = dueState(card.dueAt, card.dueComplete);
   const coverAttachment = card.cover?.attachmentId ? card.attachments.find((a: any) => a.id === card.cover.attachmentId) : null;
-  const act = async (fn: () => Promise<any>, ok?: string) => {
+  const images = card.attachments.filter((a: any) => a.isImage).map((a: any) => ({ id: a.id, url: a.url, name: a.name }));
+  const act: Act = async (fn, ok, optimistic) => {
+    if (optimistic) setCard((c: Detail) => (c ? optimistic(c) : c));
     const r = await run(fn, ok);
-    load();
+    if (r === undefined) load();
     return r;
   };
   const upload = async (files: FileList | File[]) => {
@@ -109,6 +185,28 @@ export function CardModal({ number, onClose }: { number: number; onClose: () => 
       await act(() => post(`/cards/${card.id}/attachments`, fd), `Attached ${f.name}`);
     }
   };
+  const toggleComplete = () => {
+    const dueComplete = !card.dueComplete;
+    // The dialog shows the board's copy of the card, so the optimistic change goes there (and to the detail).
+    patchCard(card.id, (c) => ({ ...c, dueComplete }));
+    return act(() => patch(`/cards/${card.id}`, { dueComplete }), undefined, (c) => ({ ...c, dueComplete }));
+  };
+  const toggleWatch = async () => {
+    const on = !watching;
+    setWatching('card', card.id, on);
+    const r = await run(() => (on ? put : del)(`/cards/${card.id}/watch`));
+    if (!r) setWatching('card', card.id, !on);
+    else setCard((c: Detail) => ({ ...c, watching: on }));
+  };
+  const archive = async () => {
+    const r: any = await act(() => post(`/cards/${card.id}/archive`));
+    if (r) push({ kind: 'info', text: 'Card archived.', action: { label: 'Undo', run: () => act(() => post(`/cards/${card.id}/restore`)) } });
+  };
+  const chip = (k: Pop, icon: React.ReactNode, text: string, ref?: React.Ref<HTMLButtonElement>) => (
+    <button ref={ref} type="button" className="chip-btn" aria-expanded={pop.is(k)} onClick={pop.toggle(k)}>
+      {icon} {text}
+    </button>
+  );
 
   return (
     <Modal onClose={requestClose} className="card-modal" labelledBy="card-title">
@@ -136,16 +234,34 @@ export function CardModal({ number, onClose }: { number: number; onClose: () => 
       >
         {card.cover?.color && <div className={`detail-cover label-${card.cover.color}`} />}
         {coverAttachment && <img className="detail-cover-img" src={coverAttachment.url} alt="" />}
-        <div className="detail-head">
-          <TitleEditor card={card} editable={editable} drafts={drafts} lastEditor={lastEditor} reload={load} />
-          <button className="icon-btn close-btn" aria-label="Close card" onClick={requestClose}>
-            ×
+        <div className="detail-topbar">
+          {editable ? (
+            <button type="button" className="list-chip" aria-label={`In list ${listName}. Move card`} aria-expanded={pop.is('move')} onClick={pop.toggle('move')}>
+              {listName} <ChevronDown size={14} aria-hidden="true" />
+            </button>
+          ) : (
+            <span className="list-chip static">{listName}</span>
+          )}
+          {card.isTemplate && (
+            <span className="pill">
+              <LayoutTemplate size={13} aria-hidden="true" /> Template
+            </span>
+          )}
+          <span className="grow" />
+          {editable && (
+            <button type="button" className="icon-btn" aria-label="Cover" title="Cover" aria-expanded={pop.is('cover')} onClick={pop.toggle('cover')}>
+              <Image size={18} />
+            </button>
+          )}
+          {!gone && (
+            <button type="button" className="icon-btn" aria-label="Card actions" title="Card actions" aria-expanded={pop.is('actions')} onClick={pop.toggle('actions')}>
+              <Ellipsis size={18} />
+            </button>
+          )}
+          <button type="button" className="icon-btn" aria-label="Close card" onClick={requestClose}>
+            <X size={20} />
           </button>
         </div>
-        <p className="muted small detail-sub">
-          #{card.number} in list <strong>{card.list?.name}</strong>
-          {card.list?.archived ? ' (archived list)' : ''} · {state.board.name}
-        </p>
 
         {gone && (
           <div className="banner banner-danger" role="alert">
@@ -153,10 +269,10 @@ export function CardModal({ number, onClose }: { number: number; onClose: () => 
             {dirty() && (
               <button
                 className="btn btn-small btn-light"
-                onClick={() =>
-                  navigator.clipboard
-                    ?.writeText(Object.values(drafts.current).filter(Boolean).join('\n\n'))
-                    .then(() => push({ kind: 'success', text: 'Draft copied to the clipboard' }))
+                onClick={async () =>
+                  (await copyText(Object.values(drafts.current).filter(Boolean).join('\n\n')))
+                    ? push({ kind: 'success', text: 'Draft copied to the clipboard' })
+                    : push({ kind: 'error', text: 'Your browser blocked copying. Select the text in the editor and copy it manually.' })
                 }
               >
                 Copy draft
@@ -166,11 +282,11 @@ export function CardModal({ number, onClose }: { number: number; onClose: () => 
         )}
         {card.archivedAt && !gone && (
           <div className="banner banner-warn" role="status">
-            This card is archived.
+            <Archive size={16} aria-hidden="true" /> This card is archived.
             {can.edit && (
               <>
                 <button className="btn btn-small btn-light" onClick={() => act(() => post(`/cards/${card.id}/restore`), 'Card restored')}>
-                  Restore
+                  <RotateCcw size={14} aria-hidden="true" /> Restore
                 </button>
                 <button
                   className="btn btn-small btn-danger"
@@ -186,24 +302,60 @@ export function CardModal({ number, onClose }: { number: number; onClose: () => 
                     })
                   }
                 >
-                  Delete…
+                  <Trash2 size={14} aria-hidden="true" /> Delete…
                 </button>
               </>
             )}
           </div>
         )}
 
-        <div className="detail-grid">
+        <div className="detail-columns">
           <div className="detail-main">
+            <div className="detail-title-row">
+              {!card.isTemplate && (
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={!!card.dueComplete}
+                  aria-label="Mark complete"
+                  className={`complete-toggle big ${card.dueComplete ? 'on' : ''}`}
+                  disabled={!editable}
+                  onClick={toggleComplete}
+                >
+                  {card.dueComplete ? <CircleCheck size={22} /> : <Circle size={22} />}
+                </button>
+              )}
+              <TitleEditor card={card} editable={editable} drafts={drafts} lastEditor={lastEditor} reload={load} autoEdit={intent.edit === 'title'} />
+            </div>
+            <p className="muted small detail-sub">
+              #{card.number} in list {listName}
+              {card.list?.archived ? ' (archived list)' : ''}
+            </p>
+
+            {editable && (
+              <div className="detail-actions" role="toolbar" aria-label="Add to card">
+                {chip('add', <Plus size={16} aria-hidden="true" />, 'Add')}
+                {chip('labels', <Tag size={16} aria-hidden="true" />, 'Labels')}
+                {chip('dates', <Clock size={16} aria-hidden="true" />, 'Dates')}
+                {chip('checklist', <SquareCheck size={16} aria-hidden="true" />, 'Checklist', checklistBtn)}
+                {chip('members', <Users size={16} aria-hidden="true" />, 'Members')}
+              </div>
+            )}
+
             {(labels.length > 0 || members.length > 0 || card.dueAt || card.startAt) && (
               <div className="detail-meta">
                 {members.length > 0 && (
                   <div>
                     <h3>Members</h3>
-                    <div className="row">
+                    <div className="row wrap">
                       {members.map((m) => (
-                        <Avatar key={m.id} user={m} />
+                        <Avatar key={m.id} user={m} size={32} />
                       ))}
+                      {editable && (
+                        <button type="button" className="round-add" aria-label="Add or remove members" onClick={pop.toggle('members')}>
+                          <Plus size={16} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -214,28 +366,26 @@ export function CardModal({ number, onClose }: { number: number; onClose: () => 
                       {labels.map((l) => (
                         <LabelChip key={l.id} label={l} />
                       ))}
+                      {editable && (
+                        <button type="button" className="round-add" aria-label="Add or remove labels" onClick={pop.toggle('labels')}>
+                          <Plus size={16} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
                 {(card.dueAt || card.startAt) && (
                   <div>
-                    <h3>Dates</h3>
-                    <label className="row">
-                      {card.dueAt && (
-                        <input
-                          type="checkbox"
-                          checked={card.dueComplete}
-                          disabled={!editable}
-                          onChange={(e) => act(() => patch(`/cards/${card.id}`, { dueComplete: e.target.checked }))}
-                          aria-label="Mark complete"
-                        />
-                      )}
-                      <span>
+                    <h3>{card.startAt && card.dueAt ? 'Dates' : card.dueAt ? 'Due date' : 'Start date'}</h3>
+                    <div className="row">
+                      {card.dueAt && <input type="checkbox" checked={!!card.dueComplete} disabled={!editable} onChange={toggleComplete} aria-label="Mark complete" />}
+                      <button type="button" className="date-btn" disabled={!editable} onClick={pop.toggle('dates')} aria-label="Edit dates">
                         {card.startAt && `${formatDate(card.startAt, false)} – `}
                         {card.dueAt && formatDate(card.dueAt)}
-                      </span>
-                      {card.dueAt && <span className={`badge due-${ds}`}>{DUE_TEXT[ds]}</span>}
-                    </label>
+                        {card.dueAt && <span className={`badge due-${ds}`}>{DUE_TEXT[ds]}</span>}
+                        {editable && <ChevronDown size={14} aria-hidden="true" />}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -243,183 +393,120 @@ export function CardModal({ number, onClose }: { number: number; onClose: () => 
 
             <DescriptionEditor card={card} editable={editable} drafts={drafts} lastEditor={lastEditor} reload={load} />
 
+            {card.attachments.length > 0 && <Attachments card={card} editable={editable} act={act} setConfirm={setConfirm} onAdd={pop.toggle('attachment')} />}
+
             {card.checklists.map((cl: any) => (
-              <Checklist key={cl.id} cl={cl} editable={editable} act={act} onDelete={() => setConfirm({ title: `Delete checklist “${cl.name}”?`, body: 'Its items will be deleted. There is no undo.', label: 'Delete checklist', run: () => act(() => del(`/checklists/${cl.id}`)) })} />
+              <Checklist
+                key={cl.id}
+                cl={cl}
+                card={card}
+                editable={editable}
+                act={act}
+                setCard={setCard}
+                onDelete={() =>
+                  setConfirm({ title: `Delete checklist “${cl.name}”?`, body: 'Its items will be deleted. There is no undo.', label: 'Delete checklist', run: () => act(() => del(`/checklists/${cl.id}`)) })
+                }
+              />
             ))}
-
-            {card.attachments.length > 0 && (
-              <section className="detail-section">
-                <h3>Attachments</h3>
-                <ul className="attachments">
-                  {card.attachments.map((a: any) => (
-                    <li key={a.id} className="attachment">
-                      {a.isImage ? <img src={a.url} alt="" className="att-thumb" loading="lazy" /> : <span className="att-icon">{a.kind === 'link' ? '🔗' : '📄'}</span>}
-                      <div className="grow">
-                        <a href={a.kind === 'link' ? a.url : `${a.url}?download=1`} target={a.kind === 'link' ? '_blank' : undefined} rel="noopener noreferrer nofollow">
-                          {a.name}
-                        </a>
-                        <div className="muted small">
-                          {a.kind === 'file' ? `${bytes(a.bytes)} · ` : ''}
-                          {a.uploader?.fullName ?? 'Someone'} · {timeAgo(a.createdAt)}
-                        </div>
-                      </div>
-                      {editable && a.isImage && (
-                        <button className="btn btn-small btn-light" onClick={() => act(() => patch(`/cards/${card.id}`, { cover: card.cover?.attachmentId === a.id ? null : { attachmentId: a.id } }))}>
-                          {card.cover?.attachmentId === a.id ? 'Remove cover' : 'Make cover'}
-                        </button>
-                      )}
-                      {editable && (
-                        <button className="btn btn-small btn-light" onClick={() => setConfirm({ title: `Remove ${a.name}?`, body: 'The attachment will be permanently removed.', label: 'Remove', run: () => act(() => del(`/attachments/${a.id}`)) })}>
-                          Remove
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
-
-            <section className="detail-section">
-              <div className="row between">
-                <h3>Comments and activity</h3>
-                <button className="btn btn-small btn-light" aria-pressed={showDetails} onClick={() => setShowDetails((v) => !v)}>
-                  {showDetails ? 'Hide details' : 'Show details'}
-                </button>
-              </div>
-              {can.comment && !gone && <CommentComposer cardId={card.id} drafts={drafts} reload={load} />}
-              {!can.comment && <p className="muted small">Commenting is turned off for your role on this board.</p>}
-              <Feed card={card} showDetails={showDetails} reload={load} setConfirm={setConfirm} />
-            </section>
           </div>
 
-          <aside className="detail-side" aria-label="Card actions">
-            {editable && (
-              <>
-                <h3>Add to card</h3>
-                <button className="btn btn-light side-btn" aria-expanded={panel === 'members'} onClick={() => setPanel(panel === 'members' ? null : 'members')}>
-                  Members
-                </button>
-                {panel === 'members' && <MembersPanel card={card} act={act} />}
-                <button className="btn btn-light side-btn" aria-expanded={panel === 'labels'} onClick={() => setPanel(panel === 'labels' ? null : 'labels')}>
-                  Labels
-                </button>
-                {panel === 'labels' && <LabelsPanel card={card} act={act} />}
-                <button className="btn btn-light side-btn" aria-expanded={panel === 'checklist'} onClick={() => setPanel(panel === 'checklist' ? null : 'checklist')}>
-                  Checklist
-                </button>
-                {panel === 'checklist' && (
-                  <form
-                    className="side-panel stack"
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      await act(() => post(`/cards/${card.id}/checklists`, { name: new FormData(e.currentTarget).get('name') }));
-                      setPanel(null);
-                    }}
-                  >
-                    <label className="field">
-                      <span>Checklist title</span>
-                      <input name="name" defaultValue="Checklist" maxLength={200} autoFocus />
-                    </label>
-                    <button className="btn btn-primary btn-small">Add checklist</button>
-                  </form>
-                )}
-                <button className="btn btn-light side-btn" aria-expanded={panel === 'dates'} onClick={() => setPanel(panel === 'dates' ? null : 'dates')}>
-                  Dates
-                </button>
-                {panel === 'dates' && <DatesPanel card={card} act={act} close={() => setPanel(null)} />}
-                <button className="btn btn-light side-btn" aria-expanded={panel === 'attachment'} onClick={() => setPanel(panel === 'attachment' ? null : 'attachment')}>
-                  Attachment
-                </button>
-                {panel === 'attachment' && (
-                  <div className="side-panel stack">
-                    <label className="field">
-                      <span>Upload a file</span>
-                      <input type="file" multiple onChange={(e) => e.target.files && upload(e.target.files).then(() => setPanel(null))} />
-                    </label>
-                    <p className="muted small">You can also drop files onto the card or paste them.</p>
-                    <form
-                      className="stack"
-                      onSubmit={async (e) => {
-                        e.preventDefault();
-                        const f = new FormData(e.currentTarget);
-                        const r = await act(() => post(`/cards/${card.id}/attachments`, { url: f.get('url'), name: f.get('name') || undefined }));
-                        if (r) setPanel(null);
-                      }}
-                    >
-                      <label className="field">
-                        <span>Or attach a link</span>
-                        <input name="url" type="url" placeholder="https://…" required />
-                      </label>
-                      <label className="field">
-                        <span>Link name (optional)</span>
-                        <input name="name" maxLength={256} />
-                      </label>
-                      <button className="btn btn-primary btn-small">Attach link</button>
-                    </form>
-                  </div>
-                )}
-                <button className="btn btn-light side-btn" aria-expanded={panel === 'cover'} onClick={() => setPanel(panel === 'cover' ? null : 'cover')}>
-                  Cover
-                </button>
-                {panel === 'cover' && (
-                  <div className="side-panel stack">
-                    <div className="swatches">
-                      {LABEL_COLORS.map((c) => (
-                        <button key={c} className={`swatch label-${c} ${card.cover?.color === c ? 'selected' : ''}`} aria-label={`${c} cover`} onClick={() => act(() => patch(`/cards/${card.id}`, { cover: { color: c } }))} />
-                      ))}
-                    </div>
-                    {card.cover && (
-                      <button className="btn btn-light btn-small" onClick={() => act(() => patch(`/cards/${card.id}`, { cover: null }))}>
-                        Remove cover
-                      </button>
-                    )}
-                    <p className="muted small">Image attachments can be set as the cover from the Attachments section.</p>
-                  </div>
-                )}
-              </>
-            )}
-            <h3>Actions</h3>
-            {editable && (
-              <>
-                <button className="btn btn-light side-btn" aria-expanded={panel === 'move'} onClick={() => setPanel(panel === 'move' ? null : 'move')}>
-                  Move
-                </button>
-                {panel === 'move' && <MoveCopyPanel card={card} mode="move" onDone={(dest) => (dest ? nav(dest) : load(), setPanel(null))} />}
-              </>
-            )}
-            {can.view && !gone && (
-              <>
-                <button className="btn btn-light side-btn" aria-expanded={panel === 'copy'} onClick={() => setPanel(panel === 'copy' ? null : 'copy')}>
-                  Copy
-                </button>
-                {panel === 'copy' && <MoveCopyPanel card={card} mode="copy" onDone={(dest) => (dest ? nav(dest) : load(), setPanel(null))} />}
-              </>
-            )}
-            {!gone && (
-              <button className="btn btn-light side-btn" aria-pressed={card.watching} onClick={() => act(() => (card.watching ? del : put)(`/cards/${card.id}/watch`))}>
-                {card.watching ? 'Watching ✓' : 'Watch'}
+          <aside className="detail-side" aria-label="Comments and activity">
+            <div className="row between side-head">
+              <h3>
+                <MessageSquare size={16} aria-hidden="true" /> Comments and activity
+              </h3>
+              <button className="btn btn-small btn-light" aria-pressed={showDetails} onClick={() => setShowDetails((v) => !v)}>
+                {showDetails ? 'Hide details' : 'Show details'}
               </button>
-            )}
-            {editable && (
-              <button
-                className="btn btn-light side-btn"
-                onClick={async () => {
-                  const r: any = await act(() => post(`/cards/${card.id}/archive`));
-                  if (r) push({ kind: 'info', text: 'Card archived.', action: { label: 'Undo', run: () => act(() => post(`/cards/${card.id}/restore`)) } });
-                }}
-              >
-                Archive
-              </button>
-            )}
-            <button
-              className="btn btn-light side-btn"
-              onClick={() => navigator.clipboard?.writeText(`${location.origin}/b/${state.board.shortId}/c/${card.number}`).then(() => push({ kind: 'success', text: 'Card link copied' }))}
-            >
-              Copy link
-            </button>
+            </div>
+            {can.comment && !gone && <CommentComposer cardId={card.id} drafts={drafts} />}
+            {!can.comment && <p className="muted small">Commenting is turned off for your role on this board.</p>}
+            <Feed card={card} showDetails={showDetails} setConfirm={setConfirm} />
           </aside>
         </div>
       </div>
+
+      {pop.is('add') && (
+        <Popover anchor={pop.anchor} title="Add to card" onClose={pop.close}>
+          <MenuItems label="Add to card">
+            {(
+              [
+                ['labels', <Tag size={18} key="i" />, 'Labels', 'Organise and prioritise'],
+                ['dates', <Clock size={18} key="i" />, 'Dates', 'Start and due dates'],
+                ['checklist', <SquareCheck size={18} key="i" />, 'Checklist', 'Break the work into steps'],
+                ['members', <Users size={18} key="i" />, 'Members', 'Assign people'],
+                ['attachment', <Paperclip size={18} key="i" />, 'Attachment', 'Files and links'],
+                ['cover', <Image size={18} key="i" />, 'Cover', 'A colour or an attached image'],
+              ] as const
+            ).map(([k, icon, label, desc]) => (
+              <button key={k} role="menuitem" onClick={() => pop.show(k, pop.anchor!)}>
+                {icon}
+                <span>
+                  {label}
+                  <span className="menu-desc">{desc}</span>
+                </span>
+              </button>
+            ))}
+          </MenuItems>
+        </Popover>
+      )}
+      {pop.is('actions') && (
+        <Popover anchor={pop.anchor} title="Card actions" onClose={pop.close}>
+          <MenuItems label="Card actions">
+            {editable && (
+              <button role="menuitem" onClick={() => pop.show('move', pop.anchor!)}>
+                <ArrowRight size={16} aria-hidden="true" /> Move
+              </button>
+            )}
+            <button role="menuitem" onClick={() => pop.show('copy', pop.anchor!)}>
+              <Copy size={16} aria-hidden="true" /> Copy
+            </button>
+            {editable && (
+              <button
+                role="menuitemcheckbox"
+                aria-checked={!!card.isTemplate}
+                onClick={() => {
+                  pop.close();
+                  act(() => patch(`/cards/${card.id}`, { isTemplate: !card.isTemplate }), card.isTemplate ? 'This card is no longer a template' : 'This card is now a template');
+                }}
+              >
+                <LayoutTemplate size={16} aria-hidden="true" /> Make template
+              </button>
+            )}
+            <button role="menuitemcheckbox" aria-checked={!!watching} onClick={() => (pop.close(), toggleWatch())}>
+              <Eye size={16} aria-hidden="true" /> Watch
+            </button>
+            <button
+              role="menuitem"
+              onClick={() => {
+                pop.close();
+                const url = `${window.location.origin}/b/${state.board.shortId}/c/${card.number}`;
+                copyText(url).then((ok) => push(ok ? { kind: 'success', text: 'Card link copied' } : { kind: 'error', text: `Your browser blocked copying. The link is ${url}`, sticky: true }));
+              }}
+            >
+              <Link size={16} aria-hidden="true" /> Copy link
+            </button>
+            {editable && (
+              <>
+                <hr />
+                <button role="menuitem" onClick={() => (pop.close(), archive())}>
+                  <Archive size={16} aria-hidden="true" /> Archive
+                </button>
+              </>
+            )}
+          </MenuItems>
+        </Popover>
+      )}
+      {pop.is('labels') && <LabelsPicker card={card} anchor={pop.anchor} onClose={pop.close} />}
+      {pop.is('members') && <MembersPicker card={card} anchor={pop.anchor} onClose={pop.close} />}
+      {pop.is('dates') && <DatesPicker card={card} anchor={pop.anchor} onClose={pop.close} />}
+      {pop.is('checklist') && <ChecklistPicker card={card} anchor={pop.anchor} onClose={pop.close} />}
+      {pop.is('attachment') && <AttachmentPicker card={card} anchor={pop.anchor} onClose={pop.close} upload={upload} />}
+      {pop.is('cover') && <CoverPicker card={card} anchor={pop.anchor} onClose={pop.close} images={images} />}
+      {pop.is('move') && <MoveCardPicker card={card} anchor={pop.anchor} onClose={pop.close} onMoved={(p) => p && nav(p)} />}
+      {pop.is('copy') && (
+        <CopyCardPicker card={card} anchor={pop.anchor} onClose={pop.close} counts={{ checklists: card.checklists.length, attachments: card.attachments.length, comments: card.comments.length }} />
+      )}
       {confirmClose && (
         <ConfirmDialog
           title="Discard unsaved changes?"
@@ -479,12 +566,12 @@ function OthersEditing({ cardId, field }: { cardId: string; field: string }) {
   );
 }
 
-function TitleEditor({ card, editable, drafts, lastEditor, reload }: { card: Detail; editable: boolean } & DraftRefs) {
+function TitleEditor({ card, editable, drafts, lastEditor, reload, autoEdit }: { card: Detail; editable: boolean; autoEdit?: boolean } & DraftRefs) {
   const { ingest } = useBoard();
-  const [draft, setDraft] = useState<string | null>(null);
+  const [draft, setDraft] = useState<string | null>(autoEdit && editable ? card.name : null);
   const [error, setError] = useState('');
   const [conflict, setConflict] = useState<null | { theirs: string; by: string }>(null);
-  const base = useRef('');
+  const base = useRef(card.name);
   useEditingPresence(card.id, 'name', draft !== null);
   const set = (v: string | null) => {
     setDraft(v);
@@ -502,7 +589,6 @@ function TitleEditor({ card, editable, drafts, lastEditor, reload }: { card: Det
       set(null);
       setConflict(null);
       setError('');
-      reload();
     } catch (e) {
       if (e instanceof ApiError && e.code === 'version_conflict') setConflict({ theirs: e.details.current.name, by: e.details.updatedBy ?? lastEditor.current.name ?? 'Someone' });
       else setError((e as Error).message);
@@ -535,6 +621,7 @@ function TitleEditor({ card, editable, drafts, lastEditor, reload }: { card: Det
         value={draft}
         autoFocus
         rows={1}
+        onFocus={(e) => e.currentTarget.select()}
         onChange={(e) => set(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
@@ -588,7 +675,7 @@ function DescriptionEditor({ card, editable, drafts, lastEditor, reload }: { car
   const editingActive = draft !== null;
   useEditingPresence(card.id, 'description', editingActive);
 
-  // Someone else saved the description while this user is editing: tell them at once (Trello shows nothing).
+  // Someone else saved the description while this user is editing: tell them at once.
   useEffect(() => {
     if (editingActive && card.description !== base.current) setNotice(lastEditor.current.description ?? 'Someone');
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -612,7 +699,6 @@ function DescriptionEditor({ card, editable, drafts, lastEditor, reload }: { car
       const r = await patch(`/cards/${card.id}`, { description: text, base: { description: against } });
       ingest(r.event);
       stop();
-      reload();
     } catch (e) {
       if (e instanceof ApiError && e.code === 'version_conflict')
         setConflict({ base: against, theirs: e.details.current.description, mine: text, by: e.details.updatedBy ?? 'Someone' });
@@ -626,82 +712,86 @@ function DescriptionEditor({ card, editable, drafts, lastEditor, reload }: { car
 
   return (
     <section className="detail-section">
-      <div className="row between">
+      <div className="section-head">
+        <TextAlignStart size={18} aria-hidden="true" className="section-icon" />
         <h3>Description</h3>
         <OthersEditing cardId={card.id} field="description" />
+        <span className="grow" />
         {editable && draft === null && card.description && (
           <button className="btn btn-small btn-light" onClick={start}>
             Edit
           </button>
         )}
       </div>
-      {draft === null ? (
-        card.description ? (
-          <Markdown source={card.description} />
-        ) : editable ? (
-          <button className="placeholder-btn" onClick={start}>
-            Add a more detailed description…
-          </button>
-        ) : (
-          <p className="muted">No description.</p>
-        )
-      ) : (
-        <div className="stack">
-          {notice && (
-            <div className="banner banner-warn" role="alert">
-              {notice} updated the description while you were editing. Your draft is kept; saving will ask which version to keep.
-              <button className="btn btn-small btn-light" onClick={() => setPreview(false)}>
-                OK
-              </button>
-            </div>
-          )}
-          <div className="tabs small" role="tablist">
-            <button role="tab" aria-selected={!preview} className={!preview ? 'active' : ''} onClick={() => setPreview(false)}>
-              Write
+      <div className="section-body">
+        {draft === null ? (
+          card.description ? (
+            <Markdown source={card.description} />
+          ) : editable ? (
+            <button className="placeholder-btn" onClick={start}>
+              Add a more detailed description…
             </button>
-            <button role="tab" aria-selected={preview} className={preview ? 'active' : ''} onClick={() => setPreview(true)}>
-              Preview
-            </button>
-            {draft !== base.current && <span className="pill">Unsaved changes</span>}
-          </div>
-          {preview ? (
-            <Markdown source={draft || '_Nothing to preview_'} className="preview" />
           ) : (
-            <textarea
-              className="desc-input"
-              aria-label="Description (Markdown)"
-              value={draft}
-              autoFocus
-              rows={8}
-              onChange={(e) => set(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                  e.preventDefault();
-                  save(draft, base.current);
-                } else if (e.key === 'Escape') {
-                  e.stopPropagation();
-                  if (draft !== base.current) setConfirmCancel(true);
-                  else stop();
-                }
-              }}
-            />
-          )}
-          {error && (
-            <div className="field-error" role="alert">
-              {error}
+            <p className="muted">No description.</p>
+          )
+        ) : (
+          <div className="stack">
+            {notice && (
+              <div className="banner banner-warn" role="alert">
+                {notice} updated the description while you were editing. Your draft is kept; saving will ask which version to keep.
+                <button className="btn btn-small btn-light" onClick={() => setNotice(null)}>
+                  OK
+                </button>
+              </div>
+            )}
+            <div className="tabs small" role="tablist">
+              <button role="tab" aria-selected={!preview} className={!preview ? 'active' : ''} onClick={() => setPreview(false)}>
+                Write
+              </button>
+              <button role="tab" aria-selected={preview} className={preview ? 'active' : ''} onClick={() => setPreview(true)}>
+                Preview
+              </button>
+              {draft !== base.current && <span className="pill">Unsaved changes</span>}
             </div>
-          )}
-          <div className="row">
-            <button className="btn btn-primary btn-small" onClick={() => save(draft, base.current)}>
-              Save
-            </button>
-            <button className="btn btn-ghost btn-small" onClick={() => (draft !== base.current ? setConfirmCancel(true) : stop())}>
-              Cancel
-            </button>
-            <span className="muted small">Markdown supported · Ctrl+Enter saves</span>
+            {preview ? (
+              <Markdown source={draft || '_Nothing to preview_'} className="preview" />
+            ) : (
+              <textarea
+                className="desc-input"
+                aria-label="Description (Markdown)"
+                value={draft}
+                autoFocus
+                rows={8}
+                onChange={(e) => set(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    save(draft, base.current);
+                  } else if (e.key === 'Escape') {
+                    e.stopPropagation();
+                    if (draft !== base.current) setConfirmCancel(true);
+                    else stop();
+                  }
+                }}
+              />
+            )}
+            {error && (
+              <div className="field-error" role="alert">
+                {error}
+              </div>
+            )}
+            <div className="row">
+              <button className="btn btn-primary btn-small" onClick={() => save(draft, base.current)}>
+                Save
+              </button>
+              <button className="btn btn-ghost btn-small" onClick={() => (draft !== base.current ? setConfirmCancel(true) : stop())}>
+                Cancel
+              </button>
+              <span className="muted small">Markdown supported · Ctrl+Enter saves</span>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
       {conflict && (
         <Modal title="The description changed while you were editing" onClose={() => setConflict(null)} className="conflict-modal">
           <div className="modal-body stack">
@@ -768,17 +858,102 @@ function DescriptionEditor({ card, editable, drafts, lastEditor, reload }: { car
   );
 }
 
-function Checklist({ cl, editable, act, onDelete }: { cl: any; editable: boolean; act: (fn: () => Promise<any>, ok?: string) => Promise<any>; onDelete: () => void }) {
+function Attachments({ card, editable, act, setConfirm, onAdd }: { card: Detail; editable: boolean; act: Act; setConfirm: (c: any) => void; onAdd: (e: React.MouseEvent<HTMLElement>) => void }) {
+  const links = card.attachments.filter((a: any) => a.kind === 'link');
+  const files = card.attachments.filter((a: any) => a.kind !== 'link');
+  const row = (a: any) => (
+    <li key={a.id} className="attachment">
+      {a.isImage ? (
+        <img src={a.url} alt="" className="att-thumb" loading="lazy" />
+      ) : (
+        <span className="att-icon">{a.kind === 'link' ? <Link size={20} aria-hidden="true" /> : <Paperclip size={20} aria-hidden="true" />}</span>
+      )}
+      <div className="grow att-text">
+        <a href={a.kind === 'link' ? a.url : `${a.url}?download=1`} target={a.kind === 'link' ? '_blank' : undefined} rel="noopener noreferrer nofollow">
+          {a.name}
+        </a>
+        <div className="muted small">
+          {a.kind === 'file' ? `${bytes(a.bytes)} · ` : ''}
+          {a.uploader?.fullName ?? 'Someone'} · {timeAgo(a.createdAt)}
+          {card.cover?.attachmentId === a.id ? ' · Cover' : ''}
+        </div>
+      </div>
+      {editable && a.isImage && (
+        <button className="btn btn-small btn-light" onClick={() => act(() => patch(`/cards/${card.id}`, { cover: card.cover?.attachmentId === a.id ? null : { attachmentId: a.id } }))}>
+          {card.cover?.attachmentId === a.id ? 'Remove cover' : 'Make cover'}
+        </button>
+      )}
+      {editable && (
+        <button
+          className="icon-btn"
+          aria-label={`Remove ${a.name}`}
+          onClick={() => setConfirm({ title: `Remove ${a.name}?`, body: 'The attachment will be permanently removed.', label: 'Remove', run: () => act(() => del(`/attachments/${a.id}`)) })}
+        >
+          <Trash2 size={16} />
+        </button>
+      )}
+    </li>
+  );
+  return (
+    <section className="detail-section">
+      <div className="section-head">
+        <Paperclip size={18} aria-hidden="true" className="section-icon" />
+        <h3>Attachments</h3>
+        <span className="grow" />
+        {editable && (
+          <button className="btn btn-small btn-light" onClick={onAdd}>
+            Add
+          </button>
+        )}
+      </div>
+      <div className="section-body">
+        {links.length > 0 && (
+          <>
+            <h4 className="subhead">Links</h4>
+            <ul className="attachments">{links.map(row)}</ul>
+          </>
+        )}
+        {files.length > 0 && (
+          <>
+            <h4 className="subhead">Files</h4>
+            <ul className="attachments">{files.map(row)}</ul>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function Checklist({ cl, card, editable, act, setCard, onDelete }: { cl: any; card: Detail; editable: boolean; act: Act; setCard: (fn: (c: Detail) => Detail) => void; onDelete: () => void }) {
   const [hideChecked, setHideChecked] = useState(false);
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [editItem, setEditItem] = useState<string | null>(null);
+  const [itemPop, setItemPop] = useState<null | { id: string; anchor: HTMLElement }>(null);
   const done = cl.items.filter((i: any) => i.checked).length;
   const pct = cl.items.length ? Math.round((done / cl.items.length) * 100) : 0;
   const ref = useRef<HTMLInputElement>(null);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
+  const shown = cl.items.filter((i: any) => !hideChecked || !i.checked);
+  const setItems = (items: any[]) => setCard((c: Detail) => ({ ...c, checklists: c.checklists.map((x: any) => (x.id === cl.id ? { ...x, items } : x)) }));
+  const reorder = (from: number, to: number) => {
+    const items: any[] = arrayMove(cl.items as any[], from, to);
+    const moved = cl.items[from];
+    const idx = items.indexOf(moved);
+    setItems(items);
+    act(() => patch(`/check-items/${moved.id}`, { position: { afterId: idx > 0 ? items[idx - 1].id : null } }));
+  };
+  const onDragEnd = (e: DragEndEvent) => {
+    if (!e.over || e.active.id === e.over.id) return;
+    const ids = cl.items.map((i: any) => i.id);
+    reorder(ids.indexOf(e.active.id), ids.indexOf(e.over.id));
+  };
+  const item = itemPop ? cl.items.find((i: any) => i.id === itemPop.id) : null;
+  const itemIdx = item ? cl.items.indexOf(item) : -1;
   return (
     <section className="detail-section" aria-label={`Checklist ${cl.name}`}>
-      <div className="row between">
+      <div className="section-head">
+        <SquareCheck size={18} aria-hidden="true" className="section-icon" />
         {renaming ? (
           <input
             defaultValue={cl.name}
@@ -802,340 +977,186 @@ function Checklist({ cl, editable, act, onDelete }: { cl: any; editable: boolean
             </button>
           </h3>
         )}
-        <div className="row">
-          {done > 0 && (
-            <button className="btn btn-small btn-light" onClick={() => setHideChecked((h) => !h)}>
-              {hideChecked ? `Show checked (${done})` : 'Hide checked'}
-            </button>
-          )}
-          {editable && (
-            <button className="btn btn-small btn-light" onClick={onDelete}>
-              Delete
-            </button>
-          )}
-        </div>
-      </div>
-      <div className="progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${cl.name} progress`}>
-        <span className="progress-text">{pct}%</span>
-        <span className="progress-bar">
-          <span style={{ width: `${pct}%` }} className={pct === 100 ? 'complete' : ''} />
-        </span>
-      </div>
-      <ul className="check-items">
-        {cl.items
-          .filter((i: any) => !hideChecked || !i.checked)
-          .map((i: any) => (
-            <li key={i.id} className="check-item">
-              <input type="checkbox" checked={i.checked} disabled={!editable} aria-label={i.name} onChange={(e) => act(() => patch(`/check-items/${i.id}`, { checked: e.target.checked }))} />
-              {editItem === i.id ? (
-                <input
-                  className="grow"
-                  defaultValue={i.name}
-                  autoFocus
-                  aria-label="Item text"
-                  maxLength={1000}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') e.currentTarget.blur();
-                    if (e.key === 'Escape') (e.stopPropagation(), setEditItem(null));
-                  }}
-                  onBlur={(e) => {
-                    setEditItem(null);
-                    const v = e.currentTarget.value.trim();
-                    if (v && v !== i.name) act(() => patch(`/check-items/${i.id}`, { name: v }));
-                  }}
-                />
-              ) : (
-                <button className={`title-btn grow ${i.checked ? 'checked' : ''}`} disabled={!editable} onClick={() => setEditItem(i.id)}>
-                  {i.name}
-                </button>
-              )}
-              {editable && (
-                <button className="icon-btn" aria-label={`Delete item ${i.name}`} onClick={() => act(() => del(`/check-items/${i.id}`))}>
-                  ×
-                </button>
-              )}
-            </li>
-          ))}
-      </ul>
-      {editable &&
-        (adding ? (
-          <form
-            className="stack"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const v = ref.current!.value.trim();
-              if (!v) return;
-              await act(() => post(`/checklists/${cl.id}/items`, { name: v }));
-              ref.current!.value = '';
-              ref.current!.focus();
-            }}
-          >
-            <input ref={ref} autoFocus aria-label="New item" placeholder="Add an item" maxLength={1000} onKeyDown={(e) => e.key === 'Escape' && (e.stopPropagation(), setAdding(false))} />
-            <div className="row">
-              <button className="btn btn-primary btn-small">Add</button>
-              <button type="button" className="btn btn-ghost btn-small" onClick={() => setAdding(false)}>
-                Cancel
-              </button>
-            </div>
-          </form>
-        ) : (
-          <button className="btn btn-small btn-light" onClick={() => setAdding(true)}>
-            Add an item
+        <span className="grow" />
+        {done > 0 && (
+          <button className="btn btn-small btn-light" onClick={() => setHideChecked((h) => !h)}>
+            {hideChecked ? `Show checked items (${done})` : 'Hide checked items'}
           </button>
-        ))}
+        )}
+        {editable && (
+          <button className="btn btn-small btn-light" onClick={onDelete}>
+            Delete
+          </button>
+        )}
+      </div>
+      <div className="section-body">
+        <div className="progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${cl.name} progress`}>
+          <span className="progress-text">{pct}%</span>
+          <span className="progress-bar">
+            <span style={{ width: `${pct}%` }} className={pct === 100 ? 'complete' : ''} />
+          </span>
+        </div>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={shown.map((i: any) => i.id)} strategy={verticalListSortingStrategy} disabled={!editable || editItem !== null}>
+            <ul className="check-items">
+              {shown.map((i: any) => (
+                <CheckItem
+                  key={i.id}
+                  item={i}
+                  editable={editable}
+                  editing={editItem === i.id}
+                  onEdit={setEditItem}
+                  onToggle={(checked) =>
+                    act(() => patch(`/check-items/${i.id}`, { checked }), undefined, (c) => ({
+                      ...c,
+                      checklists: c.checklists.map((x: any) => (x.id === cl.id ? { ...x, items: x.items.map((it: any) => (it.id === i.id ? { ...it, checked } : it)) } : x)),
+                    }))
+                  }
+                  onRename={(name) => act(() => patch(`/check-items/${i.id}`, { name }))}
+                  onMenu={(anchor) => setItemPop({ id: i.id, anchor })}
+                />
+              ))}
+            </ul>
+          </SortableContext>
+        </DndContext>
+        {hideChecked && done > 0 && done === cl.items.length && <p className="muted small">Everything in this checklist is done.</p>}
+        {editable &&
+          (adding ? (
+            <form
+              className="stack"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const v = ref.current!.value.trim();
+                if (!v) return;
+                const r = await act(() => post(`/checklists/${cl.id}/items`, { name: v }));
+                if (!r || !ref.current) return; // keep the typed item when it failed
+                ref.current.value = '';
+                ref.current.focus();
+              }}
+            >
+              <input ref={ref} autoFocus aria-label="New item" placeholder="Add an item" maxLength={1000} onKeyDown={(e) => e.key === 'Escape' && (e.stopPropagation(), setAdding(false))} />
+              <div className="row">
+                <button className="btn btn-primary btn-small">Add</button>
+                <button type="button" className="btn btn-ghost btn-small" onClick={() => setAdding(false)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button className="btn btn-small btn-light" onClick={() => setAdding(true)}>
+              Add an item
+            </button>
+          ))}
+      </div>
+      {itemPop && item && (
+        <Popover anchor={itemPop.anchor} title="Item actions" onClose={() => setItemPop(null)}>
+          <MenuItems label={`Actions for ${item.name}`}>
+            <button
+              role="menuitem"
+              onClick={async () => {
+                setItemPop(null);
+                const r: any = await act(() => post(`/check-items/${item.id}/convert`), 'Converted to a card');
+                if (r?.card) setItems(cl.items.filter((x: any) => x.id !== item.id));
+              }}
+            >
+              <ArrowRight size={16} aria-hidden="true" /> Convert to card
+            </button>
+            {itemIdx > 0 && (
+              <button role="menuitem" onClick={() => (setItemPop(null), reorder(itemIdx, itemIdx - 1))}>
+                Move up
+              </button>
+            )}
+            {itemIdx < cl.items.length - 1 && (
+              <button role="menuitem" onClick={() => (setItemPop(null), reorder(itemIdx, itemIdx + 1))}>
+                Move down
+              </button>
+            )}
+            <hr />
+            <button
+              role="menuitem"
+              className="danger"
+              onClick={() => {
+                setItemPop(null);
+                act(() => del(`/check-items/${item.id}`), undefined, (c) => ({
+                  ...c,
+                  checklists: c.checklists.map((x: any) => (x.id === cl.id ? { ...x, items: x.items.filter((it: any) => it.id !== item.id) } : x)),
+                }));
+              }}
+            >
+              <Trash2 size={16} aria-hidden="true" /> Delete
+            </button>
+          </MenuItems>
+        </Popover>
+      )}
     </section>
   );
 }
 
-function MembersPanel({ card, act }: { card: Detail; act: (fn: () => Promise<any>) => Promise<any> }) {
-  const { state } = useBoard();
+function CheckItem({
+  item,
+  editable,
+  editing,
+  onEdit,
+  onToggle,
+  onRename,
+  onMenu,
+}: {
+  item: any;
+  editable: boolean;
+  editing: boolean;
+  onEdit: (id: string | null) => void;
+  onToggle: (checked: boolean) => void;
+  onRename: (name: string) => void;
+  onMenu: (anchor: HTMLElement) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id, disabled: !editable || editing });
+  const style = { transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   return (
-    <div className="side-panel stack" role="group" aria-label="Card members">
-      {state.members.map((m) => {
-        const on = card.memberIds.includes(m.id);
-        return (
-          <label key={m.id} className="row">
-            <input type="checkbox" checked={on} onChange={() => act(() => (on ? del : put)(`/cards/${card.id}/members/${m.id}`))} />
-            <Avatar user={m} size={22} /> {m.fullName}
-          </label>
-        );
-      })}
-    </div>
-  );
-}
-
-function LabelsPanel({ card, act }: { card: Detail; act: (fn: () => Promise<any>) => Promise<any> }) {
-  const { state, run } = useBoard();
-  const [editing, setEditing] = useState<string | 'new' | null>(null);
-  const [color, setColor] = useState<string | null>('green');
-  const editLabel = editing && editing !== 'new' ? state.labels.find((l) => l.id === editing) : null;
-  return (
-    <div className="side-panel stack" role="group" aria-label="Labels">
+    <li ref={setNodeRef} style={style} className="check-item">
+      <input type="checkbox" checked={item.checked} disabled={!editable} aria-label={item.name} onChange={(e) => onToggle(e.target.checked)} />
       {editing ? (
-        <form
-          className="stack"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            const name = String(new FormData(e.currentTarget).get('name') ?? '');
-            if (editing === 'new') {
-              const r: any = await run(() => post(`/boards/${state.board.id}/labels`, { name, color }));
-              if (r?.label) await act(() => put(`/cards/${card.id}/labels/${r.label.id}`));
-            } else await run(() => patch(`/labels/${editing}`, { name, color }));
-            setEditing(null);
+        <input
+          className="grow"
+          defaultValue={item.name}
+          autoFocus
+          aria-label="Item text"
+          maxLength={1000}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur();
+            if (e.key === 'Escape') (e.stopPropagation(), onEdit(null));
           }}
-        >
-          <label className="field">
-            <span>Label name</span>
-            <input name="name" defaultValue={editLabel?.name ?? ''} maxLength={100} autoFocus />
-          </label>
-          <div className="swatches" role="radiogroup" aria-label="Colour">
-            {LABEL_COLORS.map((c) => (
-              <button type="button" role="radio" aria-checked={color === c} key={c} className={`swatch label-${c} ${color === c ? 'selected' : ''}`} aria-label={c} onClick={() => setColor(c)} />
-            ))}
-            <button type="button" role="radio" aria-checked={color === null} className={`swatch label-none ${color === null ? 'selected' : ''}`} aria-label="No colour" onClick={() => setColor(null)} />
-          </div>
-          <div className="row">
-            <button className="btn btn-primary btn-small">{editing === 'new' ? 'Create' : 'Save'}</button>
-            <button type="button" className="btn btn-ghost btn-small" onClick={() => setEditing(null)}>
-              Cancel
-            </button>
-            {editLabel && (
-              <button type="button" className="btn btn-danger btn-small" onClick={() => run(() => del(`/labels/${editLabel.id}`)).then(() => setEditing(null))}>
-                Delete label
-              </button>
-            )}
-          </div>
-        </form>
+          onBlur={(e) => {
+            onEdit(null);
+            const v = e.currentTarget.value.trim();
+            if (v && v !== item.name) onRename(v);
+          }}
+        />
       ) : (
-        <>
-          {state.labels.map((l) => {
-            const on = card.labelIds.includes(l.id);
-            return (
-              <div key={l.id} className="row">
-                <label className="row grow">
-                  <input type="checkbox" checked={on} onChange={() => act(() => (on ? del : put)(`/cards/${card.id}/labels/${l.id}`))} />
-                  <LabelChip label={l} /> {!l.name && <span className="muted small">{l.color}</span>}
-                </label>
-                <button
-                  className="icon-btn"
-                  aria-label={`Edit label ${l.name || l.color}`}
-                  onClick={() => {
-                    setColor(l.color);
-                    setEditing(l.id);
-                  }}
-                >
-                  ✎
-                </button>
-              </div>
-            );
-          })}
-          <button
-            className="btn btn-light btn-small"
-            onClick={() => {
-              setColor('green');
-              setEditing('new');
-            }}
-          >
-            Create a new label
-          </button>
-        </>
-      )}
-    </div>
-  );
-}
-
-const toLocalInput = (iso: string | null, withTime: boolean) => {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  return withTime ? `${date}T${pad(d.getHours())}:${pad(d.getMinutes())}` : date;
-};
-
-function DatesPanel({ card, act, close }: { card: Detail; act: (fn: () => Promise<any>) => Promise<any>; close: () => void }) {
-  const tomorrow = new Date(Date.now() + 86_400_000).toISOString();
-  return (
-    <form
-      className="side-panel stack"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        const f = new FormData(e.currentTarget);
-        const start = String(f.get('start') || '');
-        const due = String(f.get('due') || '');
-        const r = await act(() =>
-          patch(`/cards/${card.id}`, {
-            startAt: start ? new Date(`${start}T00:00`).toISOString() : null,
-            dueAt: due ? new Date(due).toISOString() : null,
-            base: { startAt: card.startAt, dueAt: card.dueAt },
-          }),
-        );
-        if (r) close();
-      }}
-    >
-      <label className="field">
-        <span>Start date</span>
-        <input type="date" name="start" defaultValue={toLocalInput(card.startAt, false)} />
-      </label>
-      <label className="field">
-        <span>Due date</span>
-        <input type="datetime-local" name="due" defaultValue={toLocalInput(card.dueAt ?? tomorrow, true)} />
-      </label>
-      <div className="row">
-        <button className="btn btn-primary btn-small">Save</button>
-        <button type="button" className="btn btn-light btn-small" onClick={() => act(() => patch(`/cards/${card.id}`, { startAt: null, dueAt: null })).then(close)}>
-          Remove dates
+        <button className={`title-btn grow ${item.checked ? 'checked' : ''}`} disabled={!editable} onClick={() => onEdit(item.id)}>
+          {item.name}
         </button>
-      </div>
-    </form>
-  );
-}
-
-function MoveCopyPanel({ card, mode, onDone }: { card: Detail; mode: 'move' | 'copy'; onDone: (dest?: string) => void }) {
-  const { state, run } = useBoard();
-  const [boards, setBoards] = useState<any[]>([{ id: state.board.id, name: state.board.name, shortId: state.board.shortId }]);
-  const [boardId, setBoardId] = useState(state.board.id);
-  const [lists, setLists] = useState<any[]>([]);
-  const [cards, setCards] = useState<any[]>([]);
-  const [listId, setListId] = useState(card.listId);
-  const [pos, setPos] = useState('bottom');
-  useEffect(() => {
-    get('/me/home').then((r) => setBoards(r.boards.filter((b: any) => !b.closedAt && (b.role === 'admin' || b.role === 'member'))));
-  }, []);
-  useEffect(() => {
-    get(`/boards/${boardId}`).then((s) => {
-      setLists(s.lists);
-      setCards(s.cards);
-      setListId((cur: string) => (s.lists.some((l: any) => l.id === cur) ? cur : s.lists[0]?.id));
-    });
-  }, [boardId]);
-  const inList = cards
-    .filter((c) => c.listId === listId && c.id !== card.id)
-    .sort((a, b) => (a.position < b.position ? -1 : 1));
-  return (
-    <form
-      className="side-panel stack"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        const f = new FormData(e.currentTarget);
-        const position = pos === 'bottom' ? 'bottom' : { afterId: pos === 'top' ? null : pos };
-        const keep = ['checklists', 'labels', 'members', 'attachments', 'comments'].filter((k) => f.get(k) === 'on');
-        const r: any =
-          mode === 'move'
-            ? await run(() => post(`/cards/${card.id}/move`, { listId, position }), 'Card moved')
-            : await run(() => post(`/cards/${card.id}/copy`, { listId, position, name: f.get('name'), keep }), 'Card copied');
-        if (!r) return;
-        const b = boards.find((x) => x.id === boardId);
-        if (mode === 'copy') onDone(`/b/${b?.shortId ?? state.board.shortId}/c/${r.card.number}`);
-        else onDone(boardId !== state.board.id ? `/b/${b?.shortId}/c/${r.card.number}` : undefined);
-      }}
-    >
-      {mode === 'copy' && (
-        <>
-          <label className="field">
-            <span>Title</span>
-            <input name="name" defaultValue={card.name} maxLength={512} required />
-          </label>
-          <fieldset>
-            <legend>Keep</legend>
-            {[
-              ['checklists', `Checklists (${card.checklists.length})`],
-              ['labels', `Labels (${card.labelIds.length})`],
-              ['members', `Members (${card.memberIds.length})`],
-              ['attachments', `Attachments (${card.attachments.length})`],
-              ['comments', `Comments (${card.comments.length})`],
-            ].map(([k, l]) => (
-              <label key={k} className="row">
-                <input type="checkbox" name={k} defaultChecked={k !== 'comments'} /> {l}
-              </label>
-            ))}
-            <p className="muted small">Copied checklist items start unchecked.</p>
-          </fieldset>
-        </>
       )}
-      <label className="field">
-        <span>Board</span>
-        <select aria-label="Destination board" value={boardId} onChange={(e) => setBoardId(e.target.value)}>
-          {boards.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="field">
-        <span>List</span>
-        <select aria-label="Destination list" value={listId} onChange={(e) => setListId(e.target.value)}>
-          {lists.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="field">
-        <span>Position</span>
-        <select aria-label="Position in list" value={pos} onChange={(e) => setPos(e.target.value)}>
-          <option value="top">Top</option>
-          {inList.map((c) => (
-            <option key={c.id} value={c.id}>
-              After “{c.name}”
-            </option>
-          ))}
-          <option value="bottom">Bottom</option>
-        </select>
-      </label>
-      {boardId !== state.board.id && <p className="muted small">Members who aren’t on the target board are removed from the card; labels are matched by name and colour.</p>}
-      <button className="btn btn-primary btn-small">{mode === 'move' ? 'Move' : 'Create copy'}</button>
-    </form>
+      {editable && !editing && (
+        <span className="check-item-actions">
+          <button className="icon-btn drag-handle" {...attributes} {...listeners} aria-label={`Reorder ${item.name}`} aria-roledescription="sortable item">
+            <span aria-hidden="true">⋮⋮</span>
+          </button>
+          <button className="icon-btn" aria-label={`Actions for item ${item.name}`} onClick={(e) => onMenu(e.currentTarget)}>
+            <Ellipsis size={16} />
+          </button>
+        </span>
+      )}
+    </li>
   );
 }
 
-function CommentComposer({ cardId, drafts, reload }: { cardId: string; drafts: React.MutableRefObject<Record<string, string>>; reload: () => Promise<void> }) {
+function CommentComposer({ cardId, drafts }: { cardId: string; drafts: React.MutableRefObject<Record<string, string>> }) {
   const { state, ingest } = useBoard();
   const [text, setText] = useState('');
   const [focused, setFocused] = useState(false);
   const [mention, setMention] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
   const update = (v: string) => {
     setText(v);
@@ -1154,15 +1175,18 @@ function CommentComposer({ cardId, drafts, reload }: { cardId: string; drafts: R
     ref.current?.focus();
   };
   const submit = async () => {
-    if (!text.trim()) return;
+    if (!text.trim() || busy) return;
+    setBusy(true);
     try {
       const r = await post(`/cards/${cardId}/comments`, { body: text });
       ingest(r.event);
       update('');
       setError('');
-      reload();
     } catch (e) {
+      // The draft stays in the box so nothing is lost.
       setError((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   };
   return (
@@ -1211,7 +1235,7 @@ function CommentComposer({ cardId, drafts, reload }: { cardId: string; drafts: R
         </div>
       )}
       {(focused || text) && (
-        <button className="btn btn-primary btn-small" onMouseDown={(e) => e.preventDefault()} onClick={submit} disabled={!text.trim()}>
+        <button className="btn btn-primary btn-small" onMouseDown={(e) => e.preventDefault()} onClick={submit} disabled={!text.trim() || busy}>
           Save comment
         </button>
       )}
@@ -1219,7 +1243,7 @@ function CommentComposer({ cardId, drafts, reload }: { cardId: string; drafts: R
   );
 }
 
-function Feed({ card, showDetails, reload, setConfirm }: { card: Detail; showDetails: boolean; reload: () => Promise<void>; setConfirm: (c: any) => void }) {
+function Feed({ card, showDetails, setConfirm }: { card: Detail; showDetails: boolean; setConfirm: (c: any) => void }) {
   const { me } = useAuth();
   const { state, run } = useBoard();
   const [editing, setEditing] = useState<string | null>(null);
@@ -1247,10 +1271,7 @@ function Feed({ card, showDetails, reload, setConfirm }: { card: Detail; showDet
                     e.preventDefault();
                     const body = String(new FormData(e.currentTarget).get('body') ?? '');
                     const r = await run(() => patch(`/comments/${it.c.id}`, { body }));
-                    if (r) {
-                      setEditing(null);
-                      reload();
-                    }
+                    if (r) setEditing(null);
                   }}
                 >
                   <textarea name="body" defaultValue={it.c.body} rows={3} autoFocus aria-label="Edit comment" onKeyDown={(e) => e.key === 'Escape' && (e.stopPropagation(), setEditing(null))} />
@@ -1280,7 +1301,7 @@ function Feed({ card, showDetails, reload, setConfirm }: { card: Detail; showDet
                         title: 'Delete comment?',
                         body: 'The comment will be permanently deleted.',
                         label: 'Delete comment',
-                        run: () => run(() => del(`/comments/${it.c.id}`)).then(() => reload()),
+                        run: () => run(() => del(`/comments/${it.c.id}`)),
                       })
                     }
                   >
@@ -1299,7 +1320,11 @@ function Feed({ card, showDetails, reload, setConfirm }: { card: Detail; showDet
           </li>
         ),
       )}
-      {items.length === 0 && <li className="muted small">No comments yet.</li>}
+      {items.length === 0 && (
+        <li className="muted small feed-empty">
+          <Activity size={16} aria-hidden="true" /> No comments yet.{!showDetails && ' Show details to see the card’s history.'}
+        </li>
+      )}
     </ul>
   );
 }

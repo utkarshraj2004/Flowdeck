@@ -23,6 +23,7 @@ export interface BoardRow {
   prefs: { comments: 'disabled' | 'members' | 'observers' | 'workspace'; invitations: 'admins' | 'members'; selfJoin: boolean; cardCovers: boolean };
   closed_at: string | null;
   last_seq: number;
+  is_template?: boolean;
   created_at: string;
   updated_at: string;
 }

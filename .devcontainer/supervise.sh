@@ -37,19 +37,59 @@ if [ -e "$RUN_DIR/rebuild" ] || [ ! -f dist/server/index.js ] || [ ! -f dist/web
   rm -f "$RUN_DIR/rebuild"
 fi
 
+# Succeeds when Flowdeck can log in to PostgreSQL; otherwise prints why not (shown by 'flowdeck status').
+db_ready() {
+  local secrets="$STATE_DIR/secrets"
+  if [ -d "$secrets" ] && { [ ! -r "$secrets" ] || [ ! -x "$secrets" ]; }; then
+    echo "user $(id -un) (uid $(id -u)) cannot read .codespace-data/secrets (owned by uid $(stat -c %u "$secrets"))"
+    return 1
+  fi
+  if ! fd_load_database_url; then
+    echo "the database container has not created .codespace-data/secrets/postgres-password yet (is it running?)"
+    return 1
+  fi
+  node -e '
+    const c = new (require("pg").Client)({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 5000 });
+    c.connect().then(() => c.end()).then(() => process.exit(0), (e) => {
+      const notRunning = "host \"db\" not found: the database container is not running (or keeps restarting: see .codespace-data/run/db.log)";
+      const why = {
+        ENOTFOUND: notRunning,
+        EAI_AGAIN: notRunning,
+        ECONNREFUSED: "PostgreSQL is not accepting connections (still starting, or failing: see .codespace-data/run/db.log)",
+        "57P03": "PostgreSQL is starting up",
+        "28P01": "PostgreSQL rejected the password in .codespace-data/secrets/postgres-password (the database container resets the role password from that file when it starts: rebuild the container)",
+        "3D000": "the database \"flowdeck\" does not exist (the database container creates it when it starts: rebuild the container)",
+      }[e.code] || "cannot connect: " + (e.code ? e.code + " " : "") + String(e.message).replace(/\s+/g, " ");
+      console.log(why);
+      process.exit(1);
+    });' 2>&1 | tail -n 1
+  return "${PIPESTATUS[0]}"
+}
+
 phase "waiting for the database"
-until fd_load_database_url && node -e '
-  const c = new (require("pg").Client)({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 3000 });
-  c.connect().then(() => c.end()).then(() => process.exit(0), () => process.exit(1));' 2>/dev/null; do
+waited=0
+last=""
+until why="$(db_ready)"; do
+  if [ "$why" != "$last" ]; then phase "waiting for the database: $why"; last="$why"; fi
   sleep 2
+  waited=$((waited + 2))
+  if [ $((waited % 120)) -eq 0 ]; then
+    echo "$(date -Is) still waiting for the database after $((waited / 60)) min: $why"
+    if [ -s "$RUN_DIR/db.log" ]; then
+      echo "  last lines of .codespace-data/run/db.log:"
+      tail -n 5 "$RUN_DIR/db.log" | sed 's/^/    /'
+    fi
+  fi
 done
+fd_load_database_url # db_ready ran in a subshell; export DATABASE_URL here for the server
+echo "$(date -Is) database is reachable"
 
 delay=2
 while true; do
   phase "running"
   echo "$(date -Is) starting Flowdeck at $FLOWDECK_BASE_URL"
   started=$(date +%s)
-  node dist/server/index.js &
+  node dist/server/index.js 9>&- & # the server must not hold the supervisor lock
   child=$!
   echo "$child" >"$RUN_DIR/server.pid"
   wait "$child"

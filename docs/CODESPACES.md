@@ -14,13 +14,20 @@ Stop or delete codespaces you are not using. A stopped codespace uses no compute
 
 ## 1. Create the codespace
 
-The Codespaces setup is on the implementation branch `claude/hopeful-galileo-us9nkk` until that pull request is merged.
+1. Open https://github.com/utkarshraj2004/Flowdeck and sign in to GitHub. The branch selector shows **`main`**, which has everything.
+2. Click the green **`<> Code`** button → **Codespaces** tab → **Create codespace on main**.
+   - To choose the machine size or region, click **`…`** → **New with options…** instead. Keep **Branch** set to `main`, **Dev container configuration** set to *Flowdeck (Codespaces preview)*, and pick the **2-core** machine.
+3. A browser tab opens with an editor (VS Code for the Web). The first start takes a few minutes: GitHub prepares the machine, then Flowdeck installs its packages, builds, and starts **in the background**. You can use the editor while that happens.
 
-1. Open https://github.com/utkarshraj2004/Flowdeck and sign in to GitHub.
-2. Click the **branch selector** above the file list (it shows `main`), and choose **`claude/hopeful-galileo-us9nkk`**.
-3. Click the green **`<> Code`** button → **Codespaces** tab → **Create codespace on claude/hopeful-galileo-us9nkk**.
-   - To choose the machine size or region, click **`…`** → **New with options…** instead. Keep **Branch** set to `claude/hopeful-galileo-us9nkk`, **Dev container configuration** set to *Flowdeck (Codespaces preview)*, and pick the **2-core** machine.
-4. A browser tab opens with an editor (VS Code for the Web). The first start takes a few minutes: GitHub prepares the machine, then Flowdeck installs its packages, builds, and starts **in the background**. You can use the editor while that happens.
+### Updating a codespace you already have
+
+A codespace created earlier from another branch (for example `claude/hopeful-galileo-us9nkk` or `claude/flowdeck-ui-upgrade`) keeps its own data in its `.codespace-data/` folder. To move it to the latest code **without losing that data**:
+
+1. In its terminal: `git fetch origin && git checkout main && git pull`. If git says local changes would be overwritten, stop and ask; do not force anything. `.codespace-data/` is ignored by git, so it is untouched.
+2. Command palette (<kbd>F1</kbd>) → **Codespaces: Rebuild Container** (not "Full Rebuild"). A rebuild keeps the `/workspaces` folder, so the database, uploads and the generated password stay. It is needed once, so the database container picks up the new start-up script.
+3. `flowdeck status` until `Server: ready`. Migrations run automatically, and your accounts and boards are still there.
+
+To try the new version **without touching** an existing codespace, create a second codespace on `main` instead; each codespace has its own separate data.
 
 ## 2. Open Flowdeck
 
@@ -90,6 +97,9 @@ To keep a board, open it, click **⋯ Menu** → **Export as JSON** before you d
 |---|---|
 | `flowdeck: command not found` | Open a new terminal, or run `.devcontainer/bin/flowdeck status` from the repository folder |
 | `flowdeck status` still shows `installing dependencies` or `building` | The first start takes a few minutes. Follow it with `flowdeck logs` |
+| `flowdeck status` stays at `waiting for the database: …` | The text after the colon says why, and the last lines of the database log are shown below it (the whole log is `.codespace-data/run/db.log`). Rebuild the container (Command Palette → *Codespaces: Rebuild Container*); your data is kept. On every start the database container makes `.codespace-data` usable for PostgreSQL, sets the database password from `.codespace-data/secrets/postgres-password` if they no longer match, and creates the database if a first start was interrupted. A codespace created before this fix needs one rebuild to get it |
+| The database log says `directory "/state/postgres" exists but is not empty` | Only if `.codespace-data/postgres` has **no** `PG_VERSION` file (then it holds no database): rename it with `mv .codespace-data/postgres .codespace-data/postgres.unused`, then rebuild the container. Never delete `.codespace-data` |
+| `Phase: … (last recorded before the supervisor ended)` | Flowdeck's supervisor is not running, so the phase is out of date. Run `flowdeck restart` |
 | The browser shows *502 Bad Gateway* or the port isn't listed | Flowdeck is not running yet. Check `flowdeck status`; if the supervisor is not running, run `flowdeck restart` |
 | The setup or reset link says it is invalid or expired | Each link works once (setup 24 h, reset 1 h). Create another: `flowdeck reset-link you@example.com` |
 | `Preview address` starts with `http://localhost` | The terminal is not inside a GitHub codespace (for example a local dev container). Inside a codespace, open a new terminal and run `flowdeck restart` |
@@ -104,8 +114,9 @@ To keep a board, open it, click **⋯ Menu** → **Export as JSON** before you d
 |---|---|
 | `.devcontainer/devcontainer.json` | Codespaces configuration: forwards port 8080 (private by default) and starts Flowdeck on every start or resume via `postStartCommand` |
 | `.devcontainer/compose.yaml` | Two containers: the Node.js 22 workspace and PostgreSQL 16 (not reachable from outside the codespace). The database password is generated on first start into `.codespace-data/secrets/` |
+| `.devcontainer/db-entrypoint.sh` | Starts PostgreSQL: prepares `.codespace-data` (owner and permissions), generates the password once, copies the database log to `.codespace-data/run/db.log`, and repairs a password mismatch or a missing database without touching data |
 | `.devcontainer/start.sh` | Launches the supervisor in the background and returns at once, so creating or resuming the codespace never waits for Flowdeck |
-| `.devcontainer/supervise.sh` | Runs `npm ci` and the build only when needed, waits for PostgreSQL, then runs the production server. The server applies pending migrations on start and is restarted if it exits. It never drops or resets data |
+| `.devcontainer/supervise.sh` | Runs `npm ci` and the build only when needed, waits for PostgreSQL (recording why it is not reachable yet), then runs the production server. The server applies pending migrations on start and is restarted if it exits. It never drops or resets data |
 | `.devcontainer/env.sh` | Computes the preview address `https://$CODESPACE_NAME-8080.$GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN`, used for setup and invite links, Secure cookies and the WebSocket origin check |
 | `.devcontainer/bin/flowdeck` | The `flowdeck` helper command |
 

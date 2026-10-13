@@ -1,0 +1,41 @@
+{
+  "root": "/tmp/claude-0/baseline",
+  "lists": 12,
+  "cardsPerList": 100,
+  "runs": 5,
+  "node": "v22.22.0",
+  "seedMs": 15830,
+  "snapshotEncoding": "identity",
+  "apiSnapshotMs": 56.9,
+  "apiSnapshotBytesOnWire": 537281,
+  "apiRenameMs": 8.9,
+  "apiMoveMs": 10.8,
+  "jsBytes": 543724,
+  "jsGzipBytes": 177790,
+  "jsFiles": 1,
+  "jsEntryGzipBytes": 177790,
+  "boardLoadMs": 288,
+  "domNodes": 8511,
+  "cardElements": 1200,
+  "remoteCreateVisibleMs": 151,
+  "mainThreadFor20RemoteEvents": {
+    "taskMs": 576,
+    "scriptMs": 455,
+    "layoutMs": 10,
+    "styleMs": 0
+  },
+  "longTaskMsFor20RemoteEvents": 444,
+  "cardOpenMs": 344,
+  "apiRequestsOnCardOpen": 1,
+  "labelToggleMs": 155,
+  "apiRequestsOnLabelToggle": 3,
+  "composerAddVisibleMs": 167,
+  "filterType8CharsMs": 935,
+  "mainThreadForFilterTyping": {
+    "taskMs": 936,
+    "scriptMs": 702,
+    "layoutMs": 30,
+    "styleMs": 2
+  },
+  "dragDropVisibleMs": 342
+}

@@ -1,13 +1,17 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { del, get, patch, post, put } from '../api';
 import { useAuth } from '../auth';
 import { ConfirmDialog, Modal } from '../components/Modal';
-import { Avatar, BACKGROUNDS, Markdown, timeAgo } from '../components/ui';
+import { Avatar, BACKGROUNDS, timeAgo } from '../components/ui';
+import { Markdown } from '../components/Markdown';
 import { useBoard } from './context';
 import { describeActivity } from './store';
 
-type View = 'main' | 'activity' | 'archived' | 'settings' | 'background' | 'about' | 'copy';
+type View = 'main' | 'activity' | 'archived' | 'settings' | 'background' | 'about' | 'copy' | 'automation' | 'webhooks';
+
+const AutomationPanel = lazy(() => import('./Automation').then((m) => ({ default: m.AutomationPanel })));
+const WebhooksPanel = lazy(() => import('./Automation').then((m) => ({ default: m.WebhooksPanel })));
 
 export function BoardMenu({ onClose }: { onClose: () => void }) {
   const { state, run, reload } = useBoard();
@@ -17,7 +21,7 @@ export function BoardMenu({ onClose }: { onClose: () => void }) {
   const [confirm, setConfirm] = useState<null | { title: string; body: string; label: string; danger?: boolean; run: () => void }>(null);
   const { board, access } = state;
   const isMember = !!access.boardRole;
-  const titles: Record<View, string> = { main: 'Board menu', activity: 'Activity', archived: 'Archived items', settings: 'Settings', background: 'Background', about: 'About this board', copy: 'Copy board' };
+  const titles: Record<View, string> = { main: 'Board menu', activity: 'Activity', archived: 'Archived items', settings: 'Settings', background: 'Background', about: 'About this board', copy: 'Copy board', automation: 'Automation', webhooks: 'Webhooks' };
 
   return (
     <Modal title={titles[view]} onClose={onClose} className="drawer">
@@ -33,6 +37,8 @@ export function BoardMenu({ onClose }: { onClose: () => void }) {
             <button onClick={() => setView('activity')}>Activity</button>
             <button onClick={() => setView('archived')}>Archived items</button>
             {access.can.admin && <button onClick={() => setView('settings')}>Settings</button>}
+            <button onClick={() => setView('automation')}>Automation</button>
+            {access.can.admin && <button onClick={() => setView('webhooks')}>Webhooks</button>}
             {access.can.edit && <button onClick={() => setView('background')}>Change background</button>}
             <button
               onClick={async () => {
@@ -95,6 +101,9 @@ export function BoardMenu({ onClose }: { onClose: () => void }) {
         {view === 'activity' && <Activity />}
         {view === 'archived' && <Archived />}
         {view === 'settings' && <Settings />}
+        {(view === 'automation' || view === 'webhooks') && (
+          <Suspense fallback={<p aria-busy="true">Loading…</p>}>{view === 'automation' ? <AutomationPanel /> : <WebhooksPanel />}</Suspense>
+        )}
         {view === 'background' && (
           <div className="swatches big">
             {BACKGROUNDS.map((b) => (
@@ -357,6 +366,9 @@ function Settings() {
       </label>
       <label className="row">
         <input type="checkbox" checked={board.prefs.cardCovers !== false} onChange={(e) => save({ prefs: { cardCovers: e.target.checked } })} /> Show image covers on cards
+      </label>
+      <label className="row">
+        <input type="checkbox" checked={!!board.isTemplate} onChange={(e) => save({ isTemplate: e.target.checked })} /> Use this board as a template (offered in “Create board”)
       </label>
     </div>
   );

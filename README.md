@@ -10,8 +10,8 @@ Flowdeck is a kanban-style work-management application that a team runs on its o
 
 You can run Flowdeck without installing anything on your computer: GitHub hosts a temporary development machine (a *codespace*) that you use in your browser.
 
-1. On https://github.com/utkarshraj2004/Flowdeck, switch the branch selector to **`claude/hopeful-galileo-us9nkk`**.
-2. Click **`<> Code`** → **Codespaces** → **Create codespace on claude/hopeful-galileo-us9nkk**, and wait for the editor to open.
+1. Open https://github.com/utkarshraj2004/Flowdeck (branch **`main`**).
+2. Click **`<> Code`** → **Codespaces** → **Create codespace on main**, and wait for the editor to open.
 3. In the editor's terminal (<kbd>Ctrl</kbd>+<kbd>`</kbd>), run `flowdeck status` until it shows `Server: ready`. Then run `flowdeck admin you@example.com` and <kbd>Ctrl</kbd>+click the one-time setup link it prints.
 4. Later, open Flowdeck from the **Ports** tab: row **Flowdeck (8080)** → globe icon. The address is **private to your GitHub account**.
 
@@ -30,23 +30,25 @@ Flowdeck uses its own code, name and design. It is modelled on familiar Trello-s
 
 ## Status
 
-**Version 0.1.0: first working version, not yet released.** The app is under active development on a pull request and has not been merged or tagged. It works end to end and is covered by automated tests (see [Testing](#testing-and-github-actions)). It has not yet run for a real team over a long period. **No public instance exists**: you run your own.
+**Version 0.1.0 with unreleased additions, on `main`. Not tagged or released.** It works end to end and is covered by automated tests (see [Testing](#testing-and-github-actions)). It has not yet run for a real team over a long period. **No public instance exists**: you run your own.
 
 What works today (details and gaps in the [implementation checklist](docs/IMPLEMENTATION-CHECKLIST.md)):
 
 | Area | Implemented |
 |---|---|
-| Accounts | First administrator via a one-time setup link, email/username + password login (argon2id), logout, password change, admin-issued password-reset links, disabling users |
-| Workspaces | Create/rename/delete, admin and member roles, reusable invite links and single-use email-bound invites (you share the link yourself; no email is sent), remove a member (keeping their boards as a guest, or not), last-admin protection |
-| Boards | Create (with optional To do/Doing/Done), private or workspace visibility, backgrounds, star, rename, description, settings (who comments, who adds people, self-join, image covers), copy, close/reopen, delete (typed confirmation), JSON export |
+| Accounts | First administrator via a one-time setup link, email/username + password login (argon2id), logout, password change, signed-in devices (sign out one or all others), admin-issued password-reset links, self-service reset by email when SMTP is set up, disabling users |
+| Workspaces | Create/rename/delete, admin and member roles, reusable invite links and single-use email-bound invites (emailed when SMTP is set up; the link can always be shared by hand), remove a member (keeping their boards as a guest, or not), last-admin protection |
+| Boards | Create (with optional To do/Doing/Done, or from a board template), private or workspace visibility, backgrounds, star, rename, description, settings (who comments, who adds people, self-join, image covers), copy, close/reopen, delete (typed confirmation), JSON export |
 | Board roles | Admin, member, observer, guest (board member from outside the workspace), workspace viewer with "Join board"; workspace admins administer every board in their workspace; all enforced on the server |
-| Lists | Create, rename, drag to reorder, move to another board, copy, move all cards, archive all cards, archive/restore, delete (after archiving), watch |
-| Cards | Create, rename, Markdown description, labels, members, start/due dates with due-state badges, complete toggle, checklists, comments with @mentions, file and link attachments, colour or image covers, move (also to other boards), copy with chosen parts, archive/restore/delete, watch |
+| Lists | Create, rename, drag to reorder, collapse, sort by name/due/date, add a card at the top or bottom, move to another board, copy, move all cards, archive all cards, archive/restore (undo with `z`), delete (after archiving), watch |
+| Cards | Create, rename (also in place with quick edit), Markdown description, labels in 30 colours, members, start/due dates with due-state badges, complete toggle, checklists (reorder, convert an item to a card), comments with @mentions, file and link attachments, colour or image covers, move (also to other boards), copy with chosen parts, card templates, archive/restore/delete, watch |
 | Ordering | Drag and drop with mouse and touch (long-press), keyboard moves (Space + arrows), Move dialogs; order is stored on the server and survives reloads and restarts |
 | Collaboration | Live updates over WebSocket, reconnect catch-up without reloading, polling fallback, "<name> is editing" presence, explicit conflict prompts for title and description, unsaved-change protection |
-| Activity and notifications | Board and card activity history, in-app notification bell (mentions, assignments, due changes, comments, attachments, completion, new cards in watched lists), grouped per card, mark as read |
+| Activity and notifications | Board and card activity history, in-app notification bell (mentions, assignments, due changes, comments, attachments, completion, new cards in watched lists), grouped per card, mark as read or unread, per-kind notification settings, unread markers on card fronts (cleared when you open the card), opt-in email digests |
+| Views | Board, table (sortable; edit title, list and due date in place) and calendar (month/week; drag or Alt+arrow keys to reschedule; cards without dates listed) of the same live board and filter |
+| Automation and integrations | Board rules (when a card is added, moved, completed or due soon → move, label, assign, complete, set a due date, archive), run on the server with failures shown; signed outgoing webhooks with retries and a delivery log; optional SMTP email |
 | Find | Board filter (keyword, members, labels, due, status, any/all) saved in the URL; global search with operators (`@user`, `#label`, `board:`, `list:`, `due:`, `has:`, `is:`, `-term`, `"phrase"`) |
-| Interface | Responsive (phone layout shows one list at a time; card details go full-screen), keyboard shortcuts (`?` lists them), accessible dialogs, colour-blind label patterns |
+| Interface | Popovers anchored to their buttons, quick edit on cards, two-column card dialog, Create menu and live search in the top bar, recently viewed boards; responsive (phone layout shows one list at a time; card details go full-screen); keyboard shortcuts (`?` lists them); accessible dialogs; colour-blind label patterns |
 | Operations | Docker Compose with persistent volumes, automatic forward-only migrations with downgrade protection, health endpoints, backup and restore scripts, administration page |
 
 ## Screenshots
@@ -55,11 +57,23 @@ What works today (details and gaps in the [implementation checklist](docs/IMPLEM
 |---|---|
 | ![Card dialog with description, checklist and attachments](docs/screenshots/card.png) | ![Workspace members page with an invite link](docs/screenshots/workspace-members.png) |
 
+| Labels: 30 colours | Quick edit on the card front |
+|---|---|
+| ![Create label popover with the 30-colour palette](docs/screenshots/labels-popover.png) | ![Quick editor with rename and card actions](docs/screenshots/quick-edit.png) |
+
+| Table view | Calendar view |
+|---|---|
+| ![Table view with sortable columns and in-place editing](docs/screenshots/table-view.png) | ![Calendar view by due date with undated cards listed](docs/screenshots/calendar-view.png) |
+
+| Automation rules |
+|---|
+| ![Board menu with two automation rules](docs/screenshots/automation.png) |
+
 | Home | Phone: board | Phone: card |
 |---|---|---|
 | ![Home page with boards](docs/screenshots/home.png) | ![Board on a phone](docs/screenshots/mobile-board.png) | ![Card details on a phone](docs/screenshots/mobile-card.png) |
 
-The screenshots show synthetic demo data in the real application.
+The screenshots show synthetic demo data in the real application. Screenshots of the previous version are in `docs/screenshots/before/` for comparison.
 
 ## How it works (architecture in brief)
 
@@ -212,20 +226,23 @@ Step-by-step instructions, a cron example and a restore drill are in [docs/OPERA
 
 ## Known limitations
 
-- **No email.** Invitations, password resets and notifications are in-app or shared by hand. SMTP is on the roadmap.
+- **Email is optional.** Without an SMTP server you configure, invitations and password resets are shared by hand and notifications stay in the app.
 - **One server process.** Live updates use in-process messaging. Running several app replicas is not supported yet.
 - **Plain HTTP on a LAN** works, but session cookies are then not marked `Secure`. Use HTTPS (Caddy profile) or a VPN for anything beyond a trusted network.
 - **Touch drag** is tested with emulated touch, not on physical phones. On phones, long-press auto-scroll across lists still needs real-device confirmation. The **Move** button is always available as a tap-only alternative.
 - **Concurrent editing** is field-based (explicit conflict prompts), not character-by-character co-editing.
-- **Not yet:** public boards, board/card templates, custom fields, calendar/table views, automation, email digests, two-factor login, SSO, avatars (initials only), retrying idempotency keys, image thumbnails, list collapsing, a session list in account settings.
+- **Not yet:** public boards, custom fields, due-date reminders and recurring dates, automation buttons and scheduled (calendar) rules, emoji reactions, two-factor login, SSO, avatars (initials only), per-user locale and time zone (the browser's are used), retrying idempotency keys, image thumbnails. See [Roadmap](#roadmap).
+- **Large boards:** a 1,200-card board loads in about 0.3–0.4 s and opens a card in about 0.27 s on a desktop machine ([docs/perf/RESULTS.md](docs/perf/RESULTS.md)). Boards are not virtualised.
 - **Not tested yet:** Firefox and Safari; long-running real-team usage; large boards beyond the automated tests.
 
 ## Roadmap
 
-1. **Hardening:** scheduled backups from the admin page, storage quota display, more browsers in CI, load test (5,000-card board, 30 clients), optional antivirus scanning of uploads.
-2. **Communication:** SMTP for invitations, password resets, due-date reminders and email digests.
-3. **Productivity:** board and card templates, table and calendar views, custom fields, emoji reactions, undo, list collapsing.
-4. **Identity:** two-factor login (TOTP), single sign-on (OIDC).
+Longer-term ideas, not part of the first version (the first-version scope is complete apart from the real-phone check; see the [checklist](docs/IMPLEMENTATION-CHECKLIST.md)):
+
+1. **Hardening:** scheduled backups from the admin page, storage quota display, Firefox/Safari in CI, load test (5,000-card board, 30 clients), optional antivirus scanning of uploads, several app replicas.
+2. **Communication:** due-date reminders and recurring dates (the worker and SMTP are in place), email-to-board, emoji reactions.
+3. **Productivity:** custom fields, automation buttons and scheduled rules, saved searches, CSV export and print view, general undo, list colours and WIP limits.
+4. **Identity:** two-factor login (TOTP), single sign-on (OIDC), avatars, per-user locale and time zone.
 5. **Migration (only on request):** import a Trello JSON export.
 
 See [docs/IMPLEMENTATION-CHECKLIST.md](docs/IMPLEMENTATION-CHECKLIST.md) for the full status list and [research/10-phases-questions.md](research/10-phases-questions.md) for the original plan.

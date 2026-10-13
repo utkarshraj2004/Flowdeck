@@ -9,8 +9,8 @@ Self-hosted team work management (workspaces → boards → lists → cards) wit
 - `research/`: product research and spec (**reference only**; observations of another product, not Flowdeck's behaviour).
 
 ## Structure
-- `server/src/`: `app.ts` (HTTP setup, auth/CSRF hook), `routes/` (REST + WebSocket), `lib/` (permissions, mutation/events, hub, positions, search), `cli.ts`, `migrate.ts`.
-- `web/src/`: `pages/`, `board/` (BoardPage, ListColumn, CardModal, BoardMenu, store), `components/`.
+- `server/src/`: `app.ts` (HTTP setup, auth/CSRF hook), `routes/` (REST + WebSocket), `lib/` (permissions, mutation/events, hub, positions, search, automation, webhooks, mail, worker), `cli.ts`, `migrate.ts`.
+- `web/src/`: `pages/`, `board/` (BoardPage, ListColumn, CardTile, CardModal, BoardMenu, views (table/calendar), Automation (rules/webhooks panels), store), `components/`.
 - `migrations/NNNN_*.sql`: forward-only; never edit a shipped migration.
 - `tests/unit`, `tests/api` (Vitest + real PostgreSQL), `tests/e2e` (Playwright).
 - `.devcontainer/`: GitHub Codespaces preview (`docs/CODESPACES.md`): compose with PostgreSQL, background supervisor, `flowdeck` helper; runtime data in gitignored `.codespace-data/`.
@@ -30,6 +30,8 @@ Self-hosted team work management (workspaces → boards → lists → cards) wit
 - Every write goes through `runMutation` and a permission check (`requireBoard` / `requireWorkspace`). No access → 404; visible but not allowed → 403 with a reason; never a silent 2xx.
 - A board and a workspace always keep ≥1 admin (`409 last_admin`).
 - Clients apply server events in `seq` order only (`ingest`).
+- Automation actions run inside `runMutation` (savepoint per rule; failures recorded, never silent; rules never chain). Webhook deliveries and email are queued in the database and sent by the in-process worker (`lib/worker.ts`); tests call `server.tick()` and never contact real recipients (`tests/api/sinks.ts`).
+- Email is optional (`FLOWDECK_SMTP_URL`): every flow must keep working without it.
 - Title, description and date edits send `base`; on `409 version_conflict` the UI asks the user. Never overwrite silently.
 - Own wording and design; do not copy another product's text, icons or artwork.
 - Do not import Trello data or use Trello credentials unless the owner explicitly asks.

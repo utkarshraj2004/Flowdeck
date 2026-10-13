@@ -1,53 +1,101 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { del, get, patch, post, put } from '../api';
-import { Avatar, DUE_TEXT, dueState, formatDate, LabelChip } from '../components/ui';
-import { ConfirmDialog, Modal } from '../components/Modal';
+import { ConfirmDialog } from '../components/Modal';
+import { MenuItems, Popover, usePopover } from '../components/Popover';
+import { ChevronsLeftRight, Ellipsis, Eye, FoldHorizontal, LayoutTemplate, Plus, X } from '../components/icons';
 import { useToasts } from '../components/Toasts';
-import { useBoard } from './context';
-import type { Card, Label, List, Member } from './store';
+import { useBoard, useBoardActions } from './context';
+import { SortableCard } from './CardTile';
+import type { Card, List } from './store';
+import type { CardPop, CardView } from './BoardPage';
 
-export function ListColumn({
+type ListPop = 'menu' | 'move' | 'moveAll' | 'sort' | 'copy' | 'templates';
+
+export const ListColumn = memo(function ListColumn({
   list,
-  cardIds,
+  cards,
   countText,
   onCardKey,
+  onHover,
   movingCardId,
   allLists,
+  view,
+  watching,
+  collapsed,
+  onToggleCollapsed,
+  onCardAction,
+  onArchived,
+  hasTemplates,
+  unreadIds,
 }: {
   list: List;
-  cardIds: string[];
+  cards: Card[];
   countText: string;
   onCardKey: (e: React.KeyboardEvent, c: Card) => void;
+  onHover: (cardId: string | null) => void;
   movingCardId: string | null;
   allLists: List[];
+  view: CardView;
+  watching: boolean;
+  collapsed: boolean;
+  onToggleCollapsed: (listId: string) => void;
+  onCardAction: (p: CardPop) => void;
+  onArchived: (l: List) => void;
+  hasTemplates: boolean;
+  /** Comma-separated ids of this list's cards with unread notifications. */
+  unreadIds: string;
 }) {
-  const { state, run, reload } = useBoard();
+  const { run, setWatching } = useBoardActions();
   const { push } = useToasts();
-  const can = state.access.can;
-  const sortable = useSortable({ id: `list:${list.id}`, disabled: !can.edit });
-  const { setNodeRef: setDropRef } = useDroppable({ id: `listbody:${list.id}` });
-  const [composer, setComposer] = useState(false);
+  const canEdit = view.canEdit;
+  const sortable = useSortable({ id: `list:${list.id}`, disabled: !canEdit });
+  // Stable while the cards are unchanged, so the cards' sortable context does not re-render every card.
+  const cardItems = useMemo(() => cards.map((c) => `card:${c.id}`), [cards]);
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `listbody:${list.id}` });
+  const [composer, setComposer] = useState<false | 'top' | 'bottom'>(false);
   const [renaming, setRenaming] = useState(false);
-  const [menu, setMenu] = useState(false);
-  const [dialog, setDialog] = useState<'move' | 'moveAll' | 'archive' | null>(null);
-  const membersById = Object.fromEntries(state.members.map((m) => [m.id, m]));
-  const watching = state.watchedListIds.includes(list.id);
+  const [confirmArchive, setConfirmArchive] = useState(false);
+  const pop = usePopover<ListPop>();
+  const menuBtn = useRef<HTMLButtonElement>(null);
   const style = { transform: CSS.Translate.toString(sortable.transform), transition: sortable.transition, opacity: sortable.isDragging ? 0.5 : 1 };
+  const templateCount = cards.filter((c) => c.isTemplate).length;
+  // Sub-menus replace the list menu and keep its anchor, like a second step.
+  const step = (k: ListPop) => () => pop.show(k, menuBtn.current!);
+
+  const archiveList = async () => {
+    const r = await run(() => post(`/lists/${list.id}/archive`));
+    if (!r) return;
+    onArchived(list);
+    push({ kind: 'info', text: `Archived list “${list.name}”. Press z to undo.`, action: { label: 'Undo', run: () => run(() => post(`/lists/${list.id}/restore`)) } });
+  };
+
+  if (collapsed)
+    return (
+      <li ref={sortable.setNodeRef} style={style} className="list list-collapsed" data-list-id={list.id} aria-label={`List ${list.name} (collapsed)`}>
+        <button className="list-expand" onClick={() => onToggleCollapsed(list.id)} aria-label={`Expand list ${list.name}`} title="Expand list">
+          <ChevronsLeftRight size={16} />
+          <span className="list-collapsed-name">{list.name}</span>
+          <span className="list-count">{countText}</span>
+        </button>
+        <h2 className="visually-hidden">{list.name}</h2>
+      </li>
+    );
 
   return (
-    <li ref={sortable.setNodeRef} style={style} className="list" data-list-id={list.id} aria-label={`List ${list.name}`}>
+    <li ref={sortable.setNodeRef} style={style} className={`list ${isOver ? 'drop-target' : ''}`} data-list-id={list.id} aria-label={`List ${list.name}`}>
       <div className="list-header" {...sortable.listeners}>
-        {renaming && can.edit ? (
+        {renaming && canEdit ? (
           <input
             className="list-name-input"
             aria-label="List name"
             defaultValue={list.name}
             maxLength={200}
             autoFocus
+            onPointerDown={(e) => e.stopPropagation()}
             onKeyDown={(e) => {
               if (e.key === 'Enter') e.currentTarget.blur();
               if (e.key === 'Escape') {
@@ -63,7 +111,7 @@ export function ListColumn({
           />
         ) : (
           <h2 className="list-name">
-            <button className="title-btn" onClick={() => can.edit && setRenaming(true)} disabled={!can.edit}>
+            <button className="title-btn" onClick={() => canEdit && setRenaming(true)} disabled={!canEdit} title={canEdit ? 'Rename list' : undefined}>
               {list.name}
             </button>
           </h2>
@@ -72,130 +120,208 @@ export function ListColumn({
           {countText}
         </span>
         {watching && (
-          <span title="You are watching this list" aria-label="Watching">
-            👁
+          <span className="list-watch" title="You are watching this list">
+            <Eye size={14} aria-hidden="true" />
+            <span className="visually-hidden">Watching</span>
           </span>
         )}
-        <div className="menu-wrap">
-          <button className="icon-btn" aria-label={`List actions for ${list.name}`} aria-expanded={menu} onClick={() => setMenu((m) => !m)}>
-            ⋯
-          </button>
-          {menu && (
-            <div className="menu" role="menu" onKeyDown={(e) => e.key === 'Escape' && setMenu(false)} onMouseLeave={() => setMenu(false)}>
-              {can.edit && (
-                <button role="menuitem" onClick={() => (setMenu(false), setComposer(true))}>
-                  Add card
-                </button>
-              )}
-              {can.edit && (
-                <button role="menuitem" onClick={() => (setMenu(false), run(() => post(`/lists/${list.id}/copy`, { name: `${list.name} (copy)` }), 'List copied'))}>
-                  Copy list
-                </button>
-              )}
-              {can.edit && (
-                <button role="menuitem" onClick={() => (setMenu(false), setDialog('move'))}>
-                  Move list…
-                </button>
-              )}
-              {can.edit && cardIds.length > 0 && (
-                <button role="menuitem" onClick={() => (setMenu(false), setDialog('moveAll'))}>
-                  Move all cards in this list…
-                </button>
-              )}
-              <button
-                role="menuitem"
-                onClick={async () => {
-                  setMenu(false);
-                  await run(() => (watching ? del : put)(`/lists/${list.id}/watch`), watching ? 'Stopped watching list' : 'Watching list: you’ll be notified of new cards');
-                  await reload();
-                }}
-              >
-                {watching ? 'Stop watching' : 'Watch'}
-              </button>
-              {can.edit && cardIds.length > 0 && (
-                <button role="menuitem" onClick={() => (setMenu(false), run(() => post(`/lists/${list.id}/archive-all-cards`), 'Cards archived'))}>
-                  Archive all cards in this list
-                </button>
-              )}
-              {can.edit && (
-                <button role="menuitem" onClick={() => (setMenu(false), setDialog('archive'))}>
-                  Archive this list
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+        <button className="icon-btn" aria-label={`Collapse list ${list.name}`} title="Collapse list" onClick={() => onToggleCollapsed(list.id)}>
+          <FoldHorizontal size={16} />
+        </button>
+        <button ref={menuBtn} className="icon-btn" aria-label={`List actions for ${list.name}`} aria-haspopup="dialog" aria-expanded={pop.is('menu')} onClick={pop.toggle('menu')}>
+          <Ellipsis size={18} />
+        </button>
       </div>
       <div ref={setDropRef} className="list-cards">
-        <SortableContext items={cardIds.map((id) => `card:${id}`)} strategy={verticalListSortingStrategy} disabled={!can.edit || !!movingCardId}>
+        {composer === 'top' && <CardComposer listId={list.id} position="top" onClose={() => setComposer(false)} />}
+        <SortableContext items={cardItems} strategy={verticalListSortingStrategy} disabled={!canEdit || !!movingCardId}>
           <ol className="cards" aria-label={`Cards in ${list.name}`}>
-            {cardIds.map((id) =>
-              state.cards[id] ? (
-                <SortableCard key={id} card={state.cards[id]} labels={state.labels} membersById={membersById} onKey={onCardKey} moving={movingCardId === id} />
-              ) : null,
-            )}
+            {cards.map((c) => (
+              <SortableCard key={c.id} card={c} view={view} onKey={onCardKey} onHover={onHover} onAction={onCardAction} moving={movingCardId === c.id} unread={!!unreadIds && unreadIds.includes(c.id)} />
+            ))}
           </ol>
         </SortableContext>
-        {composer && <CardComposer listId={list.id} onClose={() => setComposer(false)} />}
+        {composer === 'bottom' && <CardComposer listId={list.id} position="bottom" onClose={() => setComposer(false)} />}
       </div>
-      {can.edit && !composer && (
-        <button className="add-card-btn" onClick={() => setComposer(true)} aria-keyshortcuts="n">
-          + Add a card
-        </button>
+      {canEdit && composer !== 'bottom' && (
+        <div className="list-footer">
+          <button className="add-card-btn" onClick={() => setComposer('bottom')} aria-keyshortcuts="n">
+            <Plus size={16} aria-hidden="true" /> Add a card
+          </button>
+          {hasTemplates && (
+            <button className="icon-btn" aria-label={`Create a card from a template in ${list.name}`} title="Create from template" onClick={pop.toggle('templates')}>
+              <LayoutTemplate size={16} />
+            </button>
+          )}
+        </div>
       )}
-      {dialog === 'archive' && (
+
+      {pop.is('menu') && (
+        <Popover anchor={pop.anchor} title="List actions" onClose={pop.close}>
+          <MenuItems label={`Actions for ${list.name}`}>
+            {canEdit && (
+              <button role="menuitem" onClick={() => (pop.close(), setComposer('top'))}>
+                Add card to the top
+              </button>
+            )}
+            {canEdit && (
+              <button role="menuitem" onClick={step('copy')}>
+                Copy list…
+              </button>
+            )}
+            {canEdit && (
+              <button role="menuitem" onClick={step('move')}>
+                Move list…
+              </button>
+            )}
+            {canEdit && cards.length > 0 && (
+              <button role="menuitem" onClick={step('moveAll')}>
+                Move all cards in this list…
+              </button>
+            )}
+            {canEdit && cards.length > 1 && (
+              <button role="menuitem" onClick={step('sort')}>
+                Sort by…
+              </button>
+            )}
+            <hr />
+            <button
+              role="menuitemcheckbox"
+              aria-checked={watching}
+              onClick={async () => {
+                pop.close();
+                setWatching('list', list.id, !watching);
+                const r = await run(() => (watching ? del : put)(`/lists/${list.id}/watch`), watching ? 'Stopped watching list' : 'Watching list: you’ll be notified of new cards');
+                if (!r) setWatching('list', list.id, watching);
+              }}
+            >
+              Watch
+            </button>
+            <button role="menuitem" onClick={() => (pop.close(), onToggleCollapsed(list.id))}>
+              Collapse list
+            </button>
+            {canEdit && (
+              <>
+                <hr />
+                {cards.length > 0 && (
+                  <button role="menuitem" onClick={() => (pop.close(), run(() => post(`/lists/${list.id}/archive-all-cards`), 'Cards archived'))}>
+                    Archive all cards in this list
+                  </button>
+                )}
+                <button role="menuitem" onClick={() => (pop.close(), setConfirmArchive(true))}>
+                  Archive this list
+                </button>
+              </>
+            )}
+          </MenuItems>
+          {templateCount > 0 && <p className="muted small">{templateCount} template card(s) in this list.</p>}
+        </Popover>
+      )}
+      {pop.is('sort') && (
+        <Popover anchor={pop.anchor} title="Sort list" onClose={pop.close} onBack={step('menu')}>
+          <p className="muted small">Reorders the cards once. New cards still go where you put them.</p>
+          <MenuItems label="Sort by">
+            {(
+              [
+                ['newest', 'Date created (newest first)'],
+                ['oldest', 'Date created (oldest first)'],
+                ['name', 'Card name (alphabetical)'],
+                ['due', 'Due date (soonest first, no date last)'],
+              ] as const
+            ).map(([by, label]) => (
+              <button key={by} role="menuitem" onClick={() => (pop.close(), run(() => post(`/lists/${list.id}/sort`, { by }), 'List sorted'))}>
+                {label}
+              </button>
+            ))}
+          </MenuItems>
+        </Popover>
+      )}
+      {pop.is('copy') && (
+        <Popover anchor={pop.anchor} title="Copy list" onClose={pop.close} onBack={step('menu')}>
+          <form
+            className="stack"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const name = String(new FormData(e.currentTarget).get('name') ?? '').trim();
+              if (!name) return;
+              const r = await run(() => post(`/lists/${list.id}/copy`, { name }), 'List copied');
+              if (r) pop.close();
+            }}
+          >
+            <label className="field">
+              <span>Name</span>
+              <textarea name="name" defaultValue={list.name} rows={2} maxLength={200} data-autofocus />
+            </label>
+            <button className="btn btn-primary btn-small">Create list</button>
+          </form>
+        </Popover>
+      )}
+      {pop.is('move') && <MoveListPopover list={list} lists={allLists} anchor={pop.anchor} onClose={pop.close} onBack={step('menu')} />}
+      {pop.is('moveAll') && (
+        <Popover anchor={pop.anchor} title="Move all cards in list" onClose={pop.close} onBack={step('menu')}>
+          <MenuItems label="Move all cards to">
+            {allLists
+              .filter((l) => l.id !== list.id)
+              .map((l) => (
+                <button key={l.id} role="menuitem" onClick={() => (pop.close(), run(() => post(`/lists/${list.id}/move-all-cards`, { listId: l.id }), 'Cards moved'))}>
+                  {l.name}
+                </button>
+              ))}
+          </MenuItems>
+        </Popover>
+      )}
+      {pop.is('templates') && <TemplatePicker listId={list.id} anchor={pop.anchor} onClose={pop.close} />}
+      {confirmArchive && (
         <ConfirmDialog
           title={`Archive “${list.name}”?`}
           body="The list and its cards are hidden from the board. You can restore it from Menu → Archived items."
           confirmLabel="Archive list"
-          onCancel={() => setDialog(null)}
+          onCancel={() => setConfirmArchive(false)}
           onConfirm={() => {
-            setDialog(null);
-            run(() => post(`/lists/${list.id}/archive`)).then((r) => r && pushUndo(list));
+            setConfirmArchive(false);
+            archiveList();
           }}
         />
       )}
-      {dialog === 'move' && <MoveListDialog list={list} lists={allLists} onClose={() => setDialog(null)} />}
-      {dialog === 'moveAll' && (
-        <Modal title="Move all cards to…" onClose={() => setDialog(null)} className="modal-small">
-          <div className="modal-body stack">
-            {allLists
-              .filter((l) => l.id !== list.id)
-              .map((l) => (
-                <button key={l.id} className="btn btn-light" onClick={() => (setDialog(null), run(() => post(`/lists/${list.id}/move-all-cards`, { listId: l.id }), 'Cards moved'))}>
-                  {l.name}
-                </button>
-              ))}
-          </div>
-        </Modal>
-      )}
     </li>
   );
+});
 
-  function pushUndo(l: List) {
-    push({ kind: 'info', text: `Archived list “${l.name}”.`, action: { label: 'Undo', run: () => run(() => post(`/lists/${l.id}/restore`)) } });
-  }
-}
-
-function MoveListDialog({ list, lists, onClose }: { list: List; lists: List[]; onClose: () => void }) {
+function MoveListPopover({ list, lists, anchor, onClose, onBack }: { list: List; lists: List[]; anchor: HTMLElement | null; onClose: () => void; onBack: () => void }) {
   const { state, run } = useBoard();
   const nav = useNavigate();
-  const [boards, setBoards] = useState<any[]>([]);
+  const [boards, setBoards] = useState<any[]>([{ id: state.board.id, name: state.board.name, shortId: state.board.shortId }]);
   const [boardId, setBoardId] = useState(state.board.id);
-  const [targetLists, setTargetLists] = useState<List[]>(lists);
-  const [after, setAfter] = useState<string>('');
+  const [targetLists, setTargetLists] = useState<List[] | null>(lists);
+  const [error, setError] = useState('');
+  const [after, setAfter] = useState<string>(() => {
+    const i = lists.findIndex((l) => l.id === list.id);
+    return i > 0 ? lists[i - 1].id : '';
+  });
   useEffect(() => {
-    get('/me/home').then((r) => setBoards(r.boards.filter((b: any) => !b.closedAt && (b.role === 'admin' || b.role === 'member'))));
+    get('/me/home')
+      .then((r) => setBoards(r.boards.filter((b: any) => !b.closedAt && (b.role === 'admin' || b.role === 'member'))))
+      .catch(() => undefined); // the current board stays available
   }, []);
   useEffect(() => {
+    let stale = false;
+    setError('');
     if (boardId === state.board.id) setTargetLists(lists);
-    else get(`/boards/${boardId}`).then((s) => setTargetLists(s.lists));
+    else {
+      setTargetLists(null);
+      get(`/boards/${boardId}`)
+        .then((s) => !stale && setTargetLists(s.lists))
+        .catch((e) => !stale && setError((e as Error).message));
+    }
+    return () => {
+      stale = true;
+    };
   }, [boardId, lists, state.board.id]);
-  const others = targetLists.filter((l) => l.id !== list.id);
+  const others = (targetLists ?? []).filter((l) => l.id !== list.id);
   return (
-    <Modal title="Move list" onClose={onClose} className="modal-small">
+    <Popover anchor={anchor} title="Move list" onClose={onClose} onBack={onBack}>
       <form
-        className="modal-body stack"
+        className="stack"
         onSubmit={async (e) => {
           e.preventDefault();
           const r = await run(() => post(`/lists/${list.id}/move`, { boardId, position: { afterId: after || null } }), 'List moved');
@@ -208,7 +334,14 @@ function MoveListDialog({ list, lists, onClose }: { list: List; lists: List[]; o
       >
         <label className="field">
           <span>Board</span>
-          <select aria-label="Destination board" value={boardId} onChange={(e) => setBoardId(e.target.value)}>
+          <select
+            aria-label="Destination board"
+            value={boardId}
+            onChange={(e) => {
+              setBoardId(e.target.value);
+              setAfter(''); // positions belong to one board
+            }}
+          >
             {boards.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
@@ -229,116 +362,92 @@ function MoveListDialog({ list, lists, onClose }: { list: List; lists: List[]; o
           </select>
         </label>
         {boardId !== state.board.id && <p className="muted small">Card members who aren’t on the target board will be removed from the cards. Labels are matched by name and colour (missing ones are created).</p>}
-        <button className="btn btn-primary">Move</button>
+        {error && (
+          <p className="field-error" role="alert">
+            Couldn’t load that board’s lists: {error}
+          </p>
+        )}
+        <button className="btn btn-primary btn-small" disabled={!targetLists}>
+          Move
+        </button>
       </form>
-    </Modal>
+    </Popover>
   );
 }
 
-function SortableCard({ card, labels, membersById, onKey, moving }: { card: Card; labels: Label[]; membersById: Record<string, Member>; onKey: (e: React.KeyboardEvent, c: Card) => void; moving: boolean }) {
-  const { attributes: _a, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `card:${card.id}` });
-  const style = { transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
-  return (
-    <li ref={setNodeRef} style={style} {...listeners}>
-      <CardTile card={card} labels={labels} membersById={membersById} onKey={onKey} moving={moving} />
-    </li>
-  );
-}
-
-export function CardTile({
-  card,
-  labels,
-  membersById,
-  onKey,
-  moving,
-  overlay,
-}: {
-  card: Card;
-  labels: Label[];
-  membersById: Record<string, Member>;
-  onKey?: (e: React.KeyboardEvent, c: Card) => void;
-  moving?: boolean;
-  overlay?: boolean;
-}) {
-  const nav = useNavigate();
-  const { state } = useBoard();
-  const cardLabels = labels.filter((l) => card.labelIds.includes(l.id));
-  const ds = dueState(card.dueAt, card.dueComplete);
-  const b = card.badges;
-  const coverImg = card.cover?.attachmentId && state.board.prefs.cardCovers !== false ? `/api/v1/attachments/${card.cover.attachmentId}/download` : null;
-  return (
-    <div
-      className={`card-tile ${moving ? 'moving' : ''} ${overlay ? 'overlay' : ''}`}
-      role="button"
-      tabIndex={overlay ? -1 : 0}
-      data-card-id={overlay ? undefined : card.id}
-      aria-roledescription="card"
-      aria-label={`${card.name}${cardLabels.length ? `, labels ${cardLabels.map((l) => l.name || l.color).join(', ')}` : ''}${card.dueAt ? `, ${DUE_TEXT[ds]} ${formatDate(card.dueAt)}` : ''}`}
-      aria-pressed={moving ? true : undefined}
-      onClick={() => !overlay && nav(`/b/${state.board.shortId}/c/${card.number}${location.search}`)}
-      onKeyDown={(e) => onKey?.(e, card)}
-    >
-      {card.cover?.color && <div className={`card-cover label-${card.cover.color}`} aria-hidden="true" />}
-      {coverImg && <img className="card-cover-img" src={coverImg} alt="" loading="lazy" />}
-      {cardLabels.length > 0 && (
-        <div className="card-labels">
-          {cardLabels.map((l) => (
-            <LabelChip key={l.id} label={l} />
+/** Create a card from one of the board's template cards (keeps its checklists, labels, members and attachments). */
+function TemplatePicker({ listId, anchor, onClose }: { listId: string; anchor: HTMLElement | null; onClose: () => void }) {
+  const { state, run, openCard } = useBoard();
+  const templates = Object.values(state.cards).filter((c) => c.isTemplate && !c.archivedAt);
+  const [chosen, setChosen] = useState<Card | null>(templates.length === 1 ? templates[0] : null);
+  const [name, setName] = useState(chosen?.name ?? '');
+  if (!chosen)
+    return (
+      <Popover key="choose" anchor={anchor} title="Card templates" onClose={onClose}>
+        <MenuItems label="Templates">
+          {templates.map((t) => (
+            <button
+              key={t.id}
+              role="menuitem"
+              onClick={() => {
+                setChosen(t);
+                setName(t.name);
+              }}
+            >
+              <LayoutTemplate size={16} aria-hidden="true" /> {t.name}
+            </button>
           ))}
-        </div>
-      )}
-      <div className="card-title">{card.name}</div>
-      <div className="card-badges">
-        {card.dueAt && (
-          <span className={`badge due-${ds}`}>
-            <span aria-hidden="true">🕑</span> {formatDate(card.dueAt, false)}
-            <span className="visually-hidden"> {DUE_TEXT[ds]}</span>
-          </span>
-        )}
-        {b.description && (
-          <span className="badge" title="Has a description" aria-label="Has a description">
-            ≡
-          </span>
-        )}
-        {b.comments > 0 && (
-          <span className="badge" aria-label={`${b.comments} comments`}>
-            💬 {b.comments}
-          </span>
-        )}
-        {b.attachments > 0 && (
-          <span className="badge" aria-label={`${b.attachments} attachments`}>
-            📎 {b.attachments}
-          </span>
-        )}
-        {b.checkItems > 0 && (
-          <span className={`badge ${b.checkItems === b.checkItemsChecked ? 'due-complete' : ''}`} aria-label={`Checklist ${b.checkItemsChecked} of ${b.checkItems} done`}>
-            ☑ {b.checkItemsChecked}/{b.checkItems}
-          </span>
-        )}
-        <span className="grow" />
-        {card.memberIds.map((id) => (membersById[id] ? <Avatar key={id} user={membersById[id]} size={24} /> : null))}
-      </div>
-    </div>
+        </MenuItems>
+        {!templates.length && <p className="muted small">No template cards on this board yet. Open a card and choose “Make template”.</p>}
+      </Popover>
+    );
+  return (
+    <Popover key="create" anchor={anchor} title="Create card from template" onClose={onClose} onBack={templates.length > 1 ? () => setChosen(null) : undefined}>
+      <form
+        className="stack"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const keep = ['checklists', 'labels', 'members', 'attachments'];
+          const r: any = await run(() => post(`/cards/${chosen.id}/copy`, { listId, position: 'bottom', name: name.trim() || chosen.name, keep }), 'Card created from template');
+          if (r) {
+            onClose();
+            openCard(r.card.number);
+          }
+        }}
+      >
+        <label className="field">
+          <span>Title</span>
+          <textarea value={name} rows={2} maxLength={512} onChange={(e) => setName(e.target.value)} data-autofocus />
+        </label>
+        <p className="muted small">The new card gets the template’s checklists, labels, members and attachments.</p>
+        <button className="btn btn-primary btn-small">Create card</button>
+      </form>
+    </Popover>
   );
 }
 
-function CardComposer({ listId, onClose }: { listId: string; onClose: () => void }) {
-  const { run } = useBoard();
+function CardComposer({ listId, position, onClose }: { listId: string; position: 'top' | 'bottom'; onClose: () => void }) {
+  const { run } = useBoardActions();
   const ref = useRef<HTMLTextAreaElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState('');
   const { push } = useToasts();
+  useEffect(() => {
+    formRef.current?.scrollIntoView({ block: 'nearest' });
+  }, []);
   const submit = async () => {
     const name = ref.current!.value.trim();
     if (!name) return onClose();
     if (name.length > 512) return setError(`Card titles can be at most 512 characters (this one has ${name.length}).`);
     setError('');
     try {
-      const r = await post(`/lists/${listId}/cards`, { name });
+      const r = await post(`/lists/${listId}/cards`, { name, position });
       run(async () => r);
       // The composer may have been closed (Esc) while the request was in flight.
       if (ref.current) {
         ref.current.value = '';
         ref.current.focus();
+        formRef.current?.scrollIntoView({ block: 'nearest' });
       }
     } catch (e) {
       push({ kind: 'error', text: (e as Error).message });
@@ -346,6 +455,7 @@ function CardComposer({ listId, onClose }: { listId: string; onClose: () => void
   };
   return (
     <form
+      ref={formRef}
       className="composer"
       onSubmit={(e) => {
         e.preventDefault();
@@ -356,7 +466,7 @@ function CardComposer({ listId, onClose }: { listId: string; onClose: () => void
         ref={ref}
         autoFocus
         aria-label="Card title"
-        placeholder="Enter a title for this card…"
+        placeholder="Enter a title or paste a link"
         rows={2}
         aria-invalid={!!error}
         onKeyDown={(e) => {
@@ -376,8 +486,8 @@ function CardComposer({ listId, onClose }: { listId: string; onClose: () => void
       )}
       <div className="row">
         <button className="btn btn-primary btn-small">Add card</button>
-        <button type="button" className="btn btn-ghost btn-small" onClick={onClose}>
-          Cancel
+        <button type="button" className="icon-btn" aria-label="Cancel adding a card" onClick={onClose}>
+          <X size={18} />
         </button>
       </div>
     </form>
@@ -385,14 +495,14 @@ function CardComposer({ listId, onClose }: { listId: string; onClose: () => void
 }
 
 export function AddList() {
-  const { state, run } = useBoard();
-  const [open, setOpen] = useState(state && Object.keys(state.lists).length === 0);
+  const { getState, run } = useBoardActions();
+  const [open, setOpen] = useState(() => Object.keys(getState().lists).length === 0);
   const ref = useRef<HTMLInputElement>(null);
   if (!open)
     return (
       <li className="list add-list">
         <button className="add-list-btn" onClick={() => setOpen(true)}>
-          + Add another list
+          <Plus size={16} aria-hidden="true" /> Add another list
         </button>
       </li>
     );
@@ -404,16 +514,17 @@ export function AddList() {
           e.preventDefault();
           const name = ref.current!.value.trim();
           if (!name) return;
-          await run(() => post(`/boards/${state.board.id}/lists`, { name }));
-          ref.current!.value = '';
-          ref.current!.focus();
+          const r = await run(() => post(`/boards/${getState().board.id}/lists`, { name }));
+          if (!r || !ref.current) return; // keep the typed name when it failed
+          ref.current.value = '';
+          ref.current.focus();
         }}
       >
         <input ref={ref} autoFocus aria-label="List name" placeholder="Enter list name…" maxLength={200} onKeyDown={(e) => e.key === 'Escape' && (e.stopPropagation(), setOpen(false))} />
         <div className="row">
           <button className="btn btn-primary btn-small">Add list</button>
-          <button type="button" className="btn btn-ghost btn-small" onClick={() => setOpen(false)}>
-            Cancel
+          <button type="button" className="icon-btn" aria-label="Cancel adding a list" onClick={() => setOpen(false)}>
+            <X size={18} />
           </button>
         </div>
       </form>

@@ -2,12 +2,14 @@ import type { FastifyRequest } from 'fastify';
 import type { Config } from './config.js';
 import type { Db } from './db.js';
 import type { Hub } from './lib/hub.js';
+import type { Worker } from './lib/worker.js';
 import { HttpError } from './lib/errors.js';
 
 export interface Ctx {
   db: Db;
   hub: Hub;
   config: Config;
+  worker: Worker;
 }
 
 export interface SessionUser {

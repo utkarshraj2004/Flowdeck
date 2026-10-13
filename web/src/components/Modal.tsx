@@ -1,5 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useLayer } from './Popover';
+import { X } from './icons';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -25,6 +27,9 @@ export function Modal({
   const ref = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  const isTop = useLayer();
+  // Captured during the first render, before an autoFocus field inside the dialog takes focus.
+  const [opener] = useState(() => document.activeElement as HTMLElement | null);
   // React keydown (not a native listener) so inner editors can stopPropagation() on Esc first.
   const keyRef = useRef<((e: KeyboardEvent) => void) | null>(null);
 
@@ -36,14 +41,15 @@ export function Modal({
   });
 
   useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
     const el = ref.current!;
     const first = (initialFocus && el.querySelector<HTMLElement>(initialFocus)) || el.querySelector<HTMLElement>(FOCUSABLE) || el;
     first.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
       if (e.key === 'Escape') {
-        // Let inner editors handle Esc first (they stop propagation).
+        // Let inner editors handle Esc first (they stop propagation). A keyboard drag in progress
+        // (dnd-kit marks its handle aria-pressed) uses Esc to cancel the drag, not to close the dialog.
+        if ((e.target as HTMLElement | null)?.closest?.('[aria-pressed="true"]')) return;
         e.preventDefault();
         closeRef.current();
       } else if (e.key === 'Tab') {
@@ -75,7 +81,7 @@ export function Modal({
   }, []);
 
   return createPortal(
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && closeRef.current()}>
+    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && isTop() && closeRef.current()}>
       <div
         ref={ref}
         className={`modal ${className}`}
@@ -93,7 +99,7 @@ export function Modal({
           <div className="modal-head">
             <h2>{title}</h2>
             <button className="icon-btn" aria-label="Close" onClick={() => closeRef.current()}>
-              ×
+              <X size={18} />
             </button>
           </div>
         )}

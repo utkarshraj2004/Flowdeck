@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
+import zlib from 'node:zlib';
+import compress from '@fastify/compress';
 import cookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
@@ -24,6 +26,9 @@ import { searchRoutes } from './routes/search.js';
 import { notificationRoutes } from './routes/notifications.js';
 import { adminRoutes } from './routes/admin.js';
 import { wsRoutes } from './routes/ws.js';
+import { automationRoutes } from './routes/automation.js';
+import { webhookRoutes } from './routes/webhooks.js';
+import { Worker } from './lib/worker.js';
 
 export const VERSION = '0.1.0';
 
@@ -31,12 +36,13 @@ export function redactUrl(url: string) {
   return url.replace(/\/(setup|invites?)\/[^/?#]+/g, '/$1/[redacted]');
 }
 
-const PUBLIC_UNSAFE = new Set(['/api/v1/auth/login']);
+const PUBLIC_UNSAFE = new Set(['/api/v1/auth/login', '/api/v1/auth/forgot']);
 
 export async function buildApp(config: Config, opts: { db?: Db; logger?: boolean } = {}): Promise<FastifyInstance & { ctx: Ctx }> {
   const db = opts.db ?? createPool(config.databaseUrl);
   const hub = new Hub(db);
-  const ctx: Ctx = { db, hub, config };
+  const ctx = { db, hub, config } as Ctx;
+  ctx.worker = new Worker(ctx);
   fs.mkdirSync(config.uploadDir, { recursive: true });
 
   const app = Fastify({
@@ -55,6 +61,13 @@ export async function buildApp(config: Config, opts: { db?: Db; logger?: boolean
   app.decorateRequest('user', null);
 
   await app.register(cookie);
+  // Board snapshots are large JSON; compress them and the client bundle (moderate levels keep CPU low).
+  await app.register(compress, {
+    threshold: 1024,
+    encodings: ['br', 'gzip'],
+    brotliOptions: { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 5 } },
+    zlibOptions: { level: 6 },
+  });
   // preHandler so the login limiter can key on the submitted email (body is parsed by then).
   await app.register(rateLimit, { global: false, hook: 'preHandler' });
   await app.register(multipart, { limits: { fileSize: config.maxUploadBytes, files: 1, fields: 5 } });
@@ -149,6 +162,8 @@ export async function buildApp(config: Config, opts: { db?: Db; logger?: boolean
       await attachmentRoutes(api, ctx);
       await searchRoutes(api, ctx);
       await notificationRoutes(api, ctx);
+      await automationRoutes(api, ctx);
+      await webhookRoutes(api, ctx);
       await adminRoutes(api, ctx);
       await wsRoutes(api, ctx);
     },
@@ -174,7 +189,9 @@ export async function buildApp(config: Config, opts: { db?: Db; logger?: boolean
     });
   }
 
+  ctx.worker.start(config.workerIntervalMs);
   app.addHook('onClose', async () => {
+    await ctx.worker.stop();
     hub.stop();
     if (!opts.db) await db.end();
   });
