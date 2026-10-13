@@ -17,23 +17,9 @@ services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
-    # The password is generated on first start into a gitignored file; it never enters git or the image.
-    entrypoint:
-      - sh
-      - -c
-      - |
-        set -e
-        # Docker creates a missing bind-mount folder as root; hand it to the workspace user (uid 1000).
-        mkdir -p /state/secrets /state/app /state/run
-        chown 1000:1000 /state /state/secrets /state/app /state/run
-        if [ ! -s /state/secrets/postgres-password ]; then
-          umask 077
-          head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > /state/secrets/postgres-password
-        fi
-        chown 1000:1000 /state/secrets/postgres-password
-        chmod 700 /state/secrets && chmod 600 /state/secrets/postgres-password
-        install -m 600 -o postgres /state/secrets/postgres-password /run/pg-password
-        exec docker-entrypoint.sh postgres
+    # db-entrypoint.sh prepares .codespace-data, generates the password once into a gitignored file (it never
+    # enters git or the image), copies the database log to .codespace-data/run/db.log, then starts PostgreSQL.
+    entrypoint: ["sh", "/flowdeck/db-entrypoint.sh"]
     environment:
       POSTGRES_USER: flowdeck
       POSTGRES_DB: flowdeck
@@ -41,4 +27,5 @@ services:
       PGDATA: /state/postgres
     volumes:
       - ../.codespace-data:/state
+      - ./db-entrypoint.sh:/flowdeck/db-entrypoint.sh:ro
     # No published ports: only the dev container can reach the database.

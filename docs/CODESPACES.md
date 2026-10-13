@@ -90,6 +90,9 @@ To keep a board, open it, click **⋯ Menu** → **Export as JSON** before you d
 |---|---|
 | `flowdeck: command not found` | Open a new terminal, or run `.devcontainer/bin/flowdeck status` from the repository folder |
 | `flowdeck status` still shows `installing dependencies` or `building` | The first start takes a few minutes. Follow it with `flowdeck logs` |
+| `flowdeck status` stays at `waiting for the database: …` | The text after the colon says why, and the last lines of the database log are shown below it (the whole log is `.codespace-data/run/db.log`). Rebuild the container (Command Palette → *Codespaces: Rebuild Container*); your data is kept. On every start the database container makes `.codespace-data` usable for PostgreSQL, sets the database password from `.codespace-data/secrets/postgres-password` if they no longer match, and creates the database if a first start was interrupted. A codespace created before this fix needs one rebuild to get it |
+| The database log says `directory "/state/postgres" exists but is not empty` | Only if `.codespace-data/postgres` has **no** `PG_VERSION` file (then it holds no database): rename it with `mv .codespace-data/postgres .codespace-data/postgres.unused`, then rebuild the container. Never delete `.codespace-data` |
+| `Phase: … (last recorded before the supervisor ended)` | Flowdeck's supervisor is not running, so the phase is out of date. Run `flowdeck restart` |
 | The browser shows *502 Bad Gateway* or the port isn't listed | Flowdeck is not running yet. Check `flowdeck status`; if the supervisor is not running, run `flowdeck restart` |
 | The setup or reset link says it is invalid or expired | Each link works once (setup 24 h, reset 1 h). Create another: `flowdeck reset-link you@example.com` |
 | `Preview address` starts with `http://localhost` | The terminal is not inside a GitHub codespace (for example a local dev container). Inside a codespace, open a new terminal and run `flowdeck restart` |
@@ -104,8 +107,9 @@ To keep a board, open it, click **⋯ Menu** → **Export as JSON** before you d
 |---|---|
 | `.devcontainer/devcontainer.json` | Codespaces configuration: forwards port 8080 (private by default) and starts Flowdeck on every start or resume via `postStartCommand` |
 | `.devcontainer/compose.yaml` | Two containers: the Node.js 22 workspace and PostgreSQL 16 (not reachable from outside the codespace). The database password is generated on first start into `.codespace-data/secrets/` |
+| `.devcontainer/db-entrypoint.sh` | Starts PostgreSQL: prepares `.codespace-data` (owner and permissions), generates the password once, copies the database log to `.codespace-data/run/db.log`, and repairs a password mismatch or a missing database without touching data |
 | `.devcontainer/start.sh` | Launches the supervisor in the background and returns at once, so creating or resuming the codespace never waits for Flowdeck |
-| `.devcontainer/supervise.sh` | Runs `npm ci` and the build only when needed, waits for PostgreSQL, then runs the production server. The server applies pending migrations on start and is restarted if it exits. It never drops or resets data |
+| `.devcontainer/supervise.sh` | Runs `npm ci` and the build only when needed, waits for PostgreSQL (recording why it is not reachable yet), then runs the production server. The server applies pending migrations on start and is restarted if it exits. It never drops or resets data |
 | `.devcontainer/env.sh` | Computes the preview address `https://$CODESPACE_NAME-8080.$GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN`, used for setup and invite links, Secure cookies and the WebSocket origin check |
 | `.devcontainer/bin/flowdeck` | The `flowdeck` helper command |
 
