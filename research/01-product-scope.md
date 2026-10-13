@@ -50,7 +50,8 @@ Tiers: **MVP** = phase 1–3 (see 10). **Later** = phase 4+. **Out** = not plann
 | Copy list | API A01 (`idListSource`) | **MVP** |
 | Archive / restore; delete only after archive (deletes its cards) | DOC D03 | **MVP** |
 | Move all cards in list / archive all cards | API A01 (`moveAllCards`, `archiveAllCards`) | **MVP** |
-| List limits (WIP), list colour, collapse | Not inspected | **Later** (N/A for Trello behaviour) |
+| List limits (WIP), list colour, collapse | List colour: **Trello paid** (OBS O06); collapse OBS O03; WIP limits not seen | **Later** |
+| Sort list (by name, date…) | OBS O06 (name sort is case-insensitive) | **Later** |
 
 ## 5. Cards
 
@@ -68,13 +69,13 @@ Tiers: **MVP** = phase 1–3 (see 10). **Later** = phase 4+. **Out** = not plann
 | Recurring due date | DOC D10 | **Later** |
 | Checklists: multiple per card, items with state, position, assignee, due | OBS, API A01 | **MVP**: items with state + position. **Later**: item assignee/due. |
 | Comments: Markdown, @mentions, @card/@board, edit/delete own, admin deletes others | DOC D22 | **MVP** |
-| Emoji reactions on comments | DOC D23 | **Later** |
+| Emoji reactions on comments | OBS O06 (free in Trello) | **Later** |
 | Attachments: upload file, add link; set image as cover | API A01, OBS | **MVP** |
 | Cover: colour or image, size | API A01 (`idAttachmentCover`), connector newsletter (3P) | **MVP**: colour + image cover. |
 | Activity feed per card / per board | OBS, DOC D22 | **MVP** |
-| Custom fields (checkbox, date, dropdown, number, text) | DOC D17, OBS | **Later** |
+| Custom fields (checkbox, date, dropdown, number, text) | DOC D17; **Trello paid** (OBS O06) | **Later** |
 | Voting, stickers | API A01 | **Out** (stickers); voting **Later** |
-| Mirror cards across boards | DOC D13 | **Out** (complex; revisit) |
+| Mirror cards across boards | DOC D13; **Trello paid**; the free alternative is a "link card" (OBS O06) | **Out** (complex; revisit) |
 | Watch / subscribe card, list, board | DOC D12, API A01 | **MVP** (in-app notifications) |
 
 ## 6. Find and navigate
@@ -83,7 +84,7 @@ Tiers: **MVP** = phase 1–3 (see 10). **Later** = phase 4+. **Out** = not plann
 |---|---|---|
 | Global search with operators (`@member`, `#label`, `label:`, `due:day`, `due:N`, `has:attachments`, `is:archived`, `board:`, `list:`, negation `-`) | DOC D05, OBS | **MVP**: subset (text, `@`, `#`, `due:`, `has:`, `is:`, `board:`, `list:`, `-`). |
 | Board filter (members, labels, due, keyword) | DOC D04 (`f`, `x`) | **MVP** |
-| Keyboard shortcuts (`?` help, `b` boards, `f` filter, `x` clear, `t` title, `j`/`k` move, `n` new card, `m` members, `d` due, Space assign self) | DOC D04 (b, f, x, t, j, k); 3P for the rest | **MVP**, with own help sheet. |
+| Keyboard shortcuts: full list observed (OBS O04, [E-session2 §T9](evidence/E-session2.md#t9--keyboard-shortcuts-obs-o04-trellocomshortcuts-logged-out)): arrows/`j`/`k` select, Enter open, `n` insert, `e` quick edit, `c` archive, `d` due, `l` + `1`–`0` labels, `;` label names, `m` members, Space self-assign, `s` watch, `t` title, `-` checklist, `,` `.` `<` `>` move to adjacent list, `f` filter, `q` my cards, `x` clear filters, `b` boards, `/` search, `]` board menu, `z`/Shift+`z` undo/redo, `r` repeat, Ctrl/Cmd+C/X/V copy/move/paste cards, Ctrl/Cmd+Enter save, Esc cancel, `?` shortcuts page, Shift+Click bulk select | OBS O04 | **MVP**: navigation, `n`, `e`, `c`, `d`, `l`+digits, `m`, Space, `t`, `-`, `,` `.`, `f`, `q`, `x`, `/`, Esc, Ctrl+Enter, `?` (own help dialog). **Later**: undo/redo, repeat, clipboard copy/move, bulk select. |
 | Notifications (in-app bell), email (never / periodic / instant) | DOC D12 | **MVP**: in-app. **Later**: email. |
 
 ### Observed additions (O03)
@@ -110,12 +111,12 @@ Tiers: **MVP** = phase 1–3 (see 10). **Later** = phase 4+. **Out** = not plann
 | Feature | Evidence | Flowdeck |
 |---|---|---|
 | Board view | DOC D08 | **MVP** |
-| Table, Calendar, Timeline, Dashboard, Map | DOC D08 (Premium) | **Later**: Table + Calendar. **Out**: Map. |
-| Inbox, Planner (calendar sync) | DOC D13 | **Out** |
+| Table, Calendar, Timeline, Dashboard, Map | DOC D08; **Trello paid**, shown locked (OBS O06) | **Later**: Table + Calendar. **Out**: Map. |
+| Inbox, Planner (calendar sync) | OBS O06 (free in Trello; Planner needs a connected calendar) | **Out** |
 | Automation (rules, card/board buttons, scheduled, due-date commands) | DOC D07 | **Later**: simple rules (trigger → action). |
 | Power-Ups / integrations | API A01 (`powerUps`), D07 | **Out**; **Later**: outgoing webhooks. |
 | Webhooks | API A01 (`/webhooks`) | **Later** |
-| Export JSON (board incl. recent actions); CSV | DOC D09 | **MVP**: JSON export. **Later**: CSV. |
+| Export JSON (board incl. recent actions); CSV; print; QR | OBS O06: JSON, Print and QR free; **CSV paid** | **MVP**: JSON export. **Later**: CSV, print view. **Out**: QR. |
 | Import | DOC D09 says Trello can't import its own JSON/CSV | **Later**: import a **Trello JSON export** into Flowdeck (strong migration value). |
 
 ## 9. Cross-cutting
@@ -126,3 +127,26 @@ Tiers: **MVP** = phase 1–3 (see 10). **Later** = phase 4+. **Out** = not plann
 | Accessibility (keyboard alternative to drag, live-region announcements) | No official Trello statement found; WCAG 2.1.1, 2.5.7 | **MVP**: WCAG 2.2 AA target (INF) |
 | Empty / loading / error states | N/A | **MVP** (INF), see 02 |
 | Object limits (5000 open cards/board, 475 open lists, 950 labels…) | DOC D14 | **MVP**: enforce configurable limits (07). |
+
+## 10. Session 5 additions and plan-tier markers (OBS O06)
+
+Trello's plan tier is recorded only so that paid behaviour is not mistaken for observed behaviour. **Flowdeck has no plan gating.** Source: [E-session5 §8](evidence/E-session5.md#8--inventory-sweep-a-admin-of-fd-parity-board-and-a-throwaway-board).
+
+| Feature | Trello tier (observed) | Behaviour observed? | Flowdeck |
+|---|---|---|---|
+| Views (Table, Calendar, Timeline, Dashboard, Map) | Paid | No (locked) | Later (Table, Calendar) |
+| Custom Fields | Paid | No | Later |
+| Mirror cards | Paid | No | Out |
+| CSV export | Paid | No | Later |
+| List colours | Paid | No | Later |
+| Observer board role | Paid | No | **MVP** (Flowdeck defines it, 04) |
+| Normal (non-admin) workspace role | Paid | No | **MVP** (Flowdeck defines it, 04) |
+| Checklist item assignee / due ("advanced checklists") | Paid (API accepts and ignores) | No | Later |
+| Card templates | Free | Yes | Later |
+| Emoji reactions | Free | Yes | Later |
+| Inbox, Planner | Free | Yes (UI) | Out |
+| Stickers (+ custom upload) | Free | Yes (UI) | Out |
+| Email-to-board (per-board address, target list/position) | Free | Yes (UI) | Later (needs inbound mail) |
+| JSON export, Print, QR code | Free | Yes | MVP (JSON); Later (print) |
+| Board templates | Uncertain (Upgrade badge seen once, not the second time) | Panel only | Later |
+| Automation (rules, buttons, schedules) | Not determined (list-menu shortcuts shown without Upgrade) | Builder not inspectable (blank cross-origin iframe) | Later (simple rules) |

@@ -2,6 +2,16 @@
 
 All of this is **INF (Flowdeck design)**. Trello evidence that shaped it is cited inline. Target store: **PostgreSQL 16+**. IDs are UUIDv7 (time-sortable, URL-safe), plus an 8-char `short_id` for board/card URLs (mirrors Trello's short links, OBS O01).
 
+**Trello observations that shape this model (OBS O05, [E-session2-auth](evidence/E-session2-auth.md)):** cards carry a per-board sequence number (`idShort`) shown in card URLs (`/c/<shortLink>/<n>-<slug>`); positions are numbers (start 2⁴⁷, step 2¹⁴, midpoint on move); descriptions are stored as Markdown; a new board has 6 untitled labels and 3 lists; free-plan uploads ≤ 10 MiB; card titles ≤ 16384; new accounts default to hourly email digests.
+**Flowdeck decisions from them (INF):** add `cards.number` (per-board sequence, unique `(board_id, number)`) and use `/c/<short_id>/<number>-<slug>`; keep fractional string keys (07) instead of numbers; seed 6 colour labels + optional To Do/Doing/Done on board creation; `prefs.emailDigest` default `periodic`.
+
+**Two-user observations that shape this model (OBS O06, [E-session5](evidence/E-session5.md)):**
+- Trello's realtime frames carry a per-channel update index (`ixLastUpdateChannel` on the legacy socket, `extensions.sequenceNumber` on GraphQL subscriptions) plus **field-level deltas**. This supports Flowdeck's per-board `activity.seq` with changed-fields payloads (06). How Trello replays from the index was not observed (HYP).
+- Concurrent edits resolve **per field, last write wins**, so Flowdeck keeps a `version` per row plus a per-field base for the 3-way prompt (07).
+- A board can end up with **no admin** in Trello. Flowdeck enforces ≥1 admin with a constraint trigger (below).
+- Removing a workspace member offers "keep board memberships" (the user becomes a **guest**). Guest status stays **derived** (`board_members` row without a `workspace_members` row), not stored.
+- Notification types observed: `mentionedOnCard`, `addedToCard`, `removedFromCard`, `changeCard` (due), `commentCard`, `addAttachmentToCard`, `markedCompleteCard`, `createdCard` (watched list), `addedToBoard`, `addedToOrganization`, `requestAccessBoardNotInOrganization`. These map to the `notifications.kind` enum below.
+
 ## Entity relationships
 
 ```mermaid
@@ -58,7 +68,7 @@ Common columns on mutable entities: `id uuid pk`, `created_at timestamptz`, `upd
 | Table | Columns | Rules |
 |---|---|---|
 | `boards` | workspace_id, short_id, name (1–200), description (≤16384), visibility `private|workspace|public`, background jsonb, prefs jsonb `{comments, invitations, selfJoin, cardCovers, cardCounts, voting}`, is_template, closed_at?, source_board_id? | enums from OBS O01; close ≠ delete (D21) |
-| `board_members` | board_id, user_id, role `admin|member|observer` | ≥1 admin; guests = user not in workspace_members |
+| `board_members` | board_id, user_id, role `admin|member|observer` | ≥1 admin, enforced by a deferred constraint trigger on delete/update (leave, remove and demote all checked; Trello allows an adminless board, OBS O06); guests = user not in workspace_members |
 | `board_stars` | user_id, board_id, position | API A01 `boardStars` |
 | `lists` | board_id, name (1–200), position (text, fractional key, see 07), archived_at?, version | |
 | `labels` | board_id, name (0–100), color (one of 30 Flowdeck palette keys or null), position | per board (D26) |
@@ -67,7 +77,7 @@ Common columns on mutable entities: `id uuid pk`, `created_at timestamptz`, `upd
 
 | Table | Columns | Rules |
 |---|---|---|
-| `cards` | board_id, list_id, short_id, name (1–512), description (Markdown ≤16384), position, start_at?, due_at?, due_reminder_minutes?, due_complete bool, cover jsonb `{color?|attachmentId?, size:'normal'|'full'}`, archived_at?, created_by, version | board_id must equal list.board_id (constraint via trigger) |
+| `cards` | board_id, list_id, short_id, number, is_template bool (card templates, Later; free in Trello, OBS O06), name (1–512), description (Markdown ≤16384), position, start_at?, due_at?, due_reminder_minutes?, due_complete bool, cover jsonb `{color?|attachmentId?, size:'normal'|'full'}`, archived_at?, created_by, version | board_id must equal list.board_id (constraint via trigger) |
 | `card_labels` | card_id, label_id | label.board_id = card.board_id |
 | `card_members` | card_id, user_id | user ∈ board_members |
 | `checklists` | card_id, name (1–200), position | |
@@ -85,7 +95,7 @@ Common columns on mutable entities: `id uuid pk`, `created_at timestamptz`, `upd
 |---|---|---|
 | `activity` | board_id, card_id?, list_id?, actor_id, type (specific enum, e.g. `card.moved`, `card.due_changed`, `comment.added`), data jsonb (before/after), created_at, seq bigint | append-only; `seq` per board, monotonically increasing; drives realtime (06) |
 | `subscriptions` | user_id, target_type `board|list|card`, target_id | watch (D12) |
-| `notifications` | user_id, activity_id, read_at? | fan-out from activity to watchers + mentioned users |
+| `notifications` | user_id, activity_id, kind (`mentioned`, `added_to_card`, `removed_from_card`, `due_changed`, `commented`, `attachment_added`, `completed`, `card_created_in_watched`, `added_to_board`, `added_to_workspace`, `access_requested`, `role_changed`), card_id?, board_id, read_at? | fan-out from activity to watchers, card members and mentioned users; never to the actor; grouped per card in the UI (OBS O06) |
 | `audit_log` | actor_id, action, target, ip_hash, created_at | admin/security events only |
 
 Activity types (INF, covers OBS O01 action list): `card.created|renamed|described|moved|copied|archived|restored|deleted|completed|uncompleted|due_changed|start_changed|cover_changed`, `card.member_added|member_removed`, `card.label_added|label_removed`, `checklist.added|removed|renamed`, `check_item.added|checked|unchecked|renamed|moved|deleted`, `comment.added|edited|deleted`, `attachment.added|removed`, `list.created|renamed|moved|archived|restored|deleted`, `board.created|renamed|closed|reopened|visibility_changed|member_added|member_removed|role_changed`.
@@ -105,3 +115,8 @@ Activity types (INF, covers OBS O01 action list): `card.created|renamed|describe
 | Checklists per card / items per checklist | 50 / 200 (INF; 3P T04 is dated) |
 | Attachments per card | 100 (INF) |
 | Upload size | 25 MB default, admin-configurable (INF; Trello free 10 MB / paid 250 MB per 3P T02) |
+
+## Not persisted (MVP)
+
+- **Editing presence** ("<name> is editing the description"): in-memory per board node, sent over the socket (06). Not stored.
+- **Unsaved drafts**: client-side only. Not stored on the server in the MVP. A deleted card's draft is offered to the user to copy (J08.11).

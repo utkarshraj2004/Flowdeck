@@ -34,6 +34,10 @@ Collected 2026-10-11. **DOC** sources were read through web-search summaries tha
 | D26 | Labels (30 colours + colourless, colour-blind patterns) | https://support.atlassian.com/trello/docs/adding-labels-to-cards/ |
 | D27 | Mobile offline (historic, 2016-17) | https://www.atlassian.com/blog/trello/trello-mobile-offline |
 | D28 | Kafka socket architecture (title/summary only) | https://www.atlassian.com/blog/how-we-build/page/8 |
+| D29 | Archive / delete cards | https://support.atlassian.com/trello/docs/archiving-and-deleting-cards/ |
+| D30 | Attachments, covers, upload limits, attachment security | https://support.atlassian.com/trello/docs/adding-attachments-to-cards/ |
+
+**Session 2 update (DOC-direct):** D01, D02, D03, D10, D11, D12, D14, D24, D29 and D30 were fetched **directly** (HTTP 200) on 2026-10-11 after network access was set to Full. Findings: [E-session2.md](E-session2.md#official-documentation-read-directly-doc-direct). Where they differ from the second-hand summaries, the direct reading wins.
 
 ## API reference (API)
 
@@ -47,20 +51,23 @@ Collected 2026-10-11. **DOC** sources were read through web-search summaries tha
 |---|---|
 | O02 | REA 6.4.0 + Chromium 141 probe of trello.com: blocked (`ERR_TUNNEL_CONNECTION_FAILED`, egress 403). [E-REA.md](E-REA.md) |
 | O03 | Live logged-out observation of trello.com and the public board `/b/nC8QJJoZ` with Chromium + REA 6.4.0. [E-trello-public.md](E-trello-public.md) |
+| O05 | Session 2, **authenticated** with the two test accounts: synthetic workspace/board; boards, lists, cards, card back, labels, dates, checklists, comments, attachments, archive/restore/delete, drag-and-drop, search, filter, same-user real-time and concurrency, offline, not-found, sharing/invitation attempts, settings, mobile. [E-session2-auth.md](E-session2-auth.md) |
+| O04 | Session 2: login attempt (stopped at Atlassian email verification), `trello.com/shortcuts`, logged-out loading/offline/not-found states, WebSocket reconnect timeline, REA 6.4.0 reinstall. [E-session2.md](E-session2.md) |
+| O06 | Session 5, authenticated, two users: recorded workspace invite (route 1, failed), workspace created by Account 2 (route 2, succeeded), two-user conflicts (T3), two-way real-time and reconnect (T4), member/admin/guest permissions with read-back (T5), live role changes, member notifications (T8), paid/free inventory sweep, axe audit. Tool attribution per result (REA / Playwright / API read-back / axe). [E-session5.md](E-session5.md) |
 | O01 | Trello connector tool schemas and read-only responses (workspace list, board list metadata, member profile shape). [E-connector.md](E-connector.md) |
 
 ## Third-party (3P), used only to flag conflicts
 
 | ID | Claim checked | URL |
 |---|---|---|
-| T01 | Observer plan tier (claims Enterprise; DOC says Premium) | https://www.stitchflow.com/user-management/atlassian-trello/manual |
-| T02 | Attachment size: 10 MB free, 250 MB paid | https://www.chanty.com/blog/trello-pricing ; community.atlassian.com threads |
+| T01 | Observer plan tier (claims Enterprise; DOC-direct D01/D02 say **Premium**; T01 is wrong) | https://www.stitchflow.com/user-management/atlassian-trello/manual |
+| T02 | Attachment size: 10 MB free, 250 MB paid (**now confirmed by DOC-direct D30**) | https://www.chanty.com/blog/trello-pricing ; community.atlassian.com threads |
 | T03 | Free plan: 10 collaborators, 10 boards per workspace (DOC D06 agrees) | https://plaky.com/learn/plaky/trello-collaborator-limit/ |
 | T04 | Per-card limits (1000 attachments, 500 checklists, 200 items) — dated 2020 | https://h-rd.org/trello-limits-cards-boards/ |
 | T05 | Move between boards may drop labels (open bug TRELLO-1614) | https://jira.atlassian.com/browse/TRELLO-1614 |
 | T06 | RabbitMQ to Kafka WebSocket pipeline (secondary analysis) | https://arpitbhayani.me/videos/trello-rabbitmq-kafka-migration-websockets/ |
 | T07 | Template boards drop automation buttons (TRELLO-882) | https://jira.atlassian.com/browse/TRELLO-882 |
 
-## Blocked sources (N/A in this session)
+## Blocked sources (session 1 only; all reachable in session 2)
 
 `trello.com` (app, `/shortcuts`, `/pricing`, `/guide`), `api.trello.com`, `support.atlassian.com`, `developer.atlassian.com`, `atlassian.com`, `web.archive.org`: HTTP 403 from the environment egress proxy. WebFetch: DNS failure for the same hosts.

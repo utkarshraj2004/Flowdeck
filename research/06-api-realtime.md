@@ -1,6 +1,6 @@
 # 06 · Proposed API and real-time event contracts
 
-**All INF (Flowdeck design).** Trello's REST API (API A01, 324 operations) was used as a completeness checklist, not copied. Trello's WebSocket protocol is **undocumented and unsupported** (DOC D16 notes; community answer), and was **not observed**. Nothing here claims to describe Trello's backend.
+**All INF (Flowdeck design).** Trello's REST API (API A01, 324 operations) was used as a completeness checklist, not copied. Trello's WebSocket protocol is **undocumented and unsupported** (DOC D16 notes; community answer). *Reconciled 2026-10-12:* its connections, reconnect timing and cross-user latency **have since been observed** (O03, E-session2, E-session2-auth §9/§14), and in session 5 the **key-only shapes** of its frames were recorded (O06, [E-session5 §4](evidence/E-session5.md#4--t4-two-way-real-time-reconnect-persistence-fd-collab-board)). No values were kept, and no format is copied. Nothing here claims to describe Trello's backend.
 
 ## Conventions
 
@@ -8,6 +8,7 @@
 - Optimistic concurrency: every mutable resource returns `version`. Updates send `If-Match: <version>`. A mismatch returns `409 version_conflict` with the current resource (07).
 - Idempotency: `Idempotency-Key` header on POST. Server stores the key for 24 h per user and replays the original response.
 - Positions: client sends `{ "before": id }`, `{ "after": id }`, `"top"` or `"bottom"`. The server computes the fractional key (07). Mirrors Trello's `pos: top|bottom|number` (API A01) without exposing numbers.
+- **No silent no-ops** (04 invariant 7). Trello answers 200 to several writes it ignores (member pref changes, free-plan checklist-item assignment, one workspace invite that created nothing: OBS O06). Flowdeck returns an error for any write it does not apply, and 2xx only when the stored state changed or already equalled the request (idempotent).
 - Errors: `{ "error": { "code": "snake_case", "message": "...", "details": {} } }`. Codes: `validation_failed` 422, `unauthenticated` 401, `forbidden` 403, `not_found` 404 (also used for no-access, to avoid leaking existence), `version_conflict` 409, `last_admin` 409, `limit_exceeded` 422, `payload_too_large` 413, `rate_limited` 429.
 - Pagination: cursor `?cursor=&limit=` (≤100), response `{ items, nextCursor }`.
 - Every mutation returns `{ data, event }`: the updated resource plus the realtime event it produced (`seq`). The client can then ignore its own echo.
@@ -95,6 +96,13 @@
 
 ### Transport
 - WebSocket `GET /api/v1/ws` (same session cookie; Origin checked). Server ping every 25 s; client reconnects with exponential backoff 1 s → 30 s plus jitter.
+- **Trello observation (OBS O04, logged out, one run):** the web client keeps **two** WebSockets: `/1/Session/socket` and `/gateway/api/graphql/subscriptions`, both JSON. After a 15 s outage the first reopened ≈4 s and the second ≈19 s after the network returned; the stale first socket was closed ≈2 s after reconnect. See [E-session2 §T4](evidence/E-session2.md#t4-partial--websocket-lifecycle-and-reconnect-obs-o04-logged-out-public-board). This shows the client behaviour only, not Trello's server design. Flowdeck keeps **one** socket (INF) and shows an offline toast as in 02.
+- **Same-user, two-tab fan-out (OBS O05):** a card created in one tab appeared in the other after 438–1018 ms (median ≈ 484 ms, 5 trials); the creating tab showed it optimistically in 138–199 ms. **Cross-user (OBS O05, §14):** A→B (B a logged-in public viewer) 383–914 ms for card creation (median ≈ 440 ms) and 854 ms for a move. A card archived or deleted while B had it open updated B's dialog live (archived banner / "Card not found"). See [E-session2-auth §9](evidence/E-session2-auth.md#9--real-time-and-concurrency-t3-t4-with-the-same-user-in-two-tabs).
+- **Two-way, two users (OBS O06):** B→A card creation 388–702 ms (median 504 ms); A→B 416–548 ms (median 443 ms); moves, renames and archives 325–499 ms. Role changes reached the affected user's open UI in 0.66–0.96 s; removal of a guest in 4.9 s. **Reconnect:** after a client was offline while another user made 3 changes, all 3 appeared 2.75 s after the network returned, with no reload and no duplicates.
+- **Frame shapes (OBS O06, keys only):**
+  - Legacy socket: client `{type, reqid}` and per-model subscribe `{type, modelType, idModel, tags[], invitationTokens[], reqid}`; server acks `{reqid, result}` and `{notify: {event, typeName, deltas[], tags, idBoard}, idModelChannel, ixLastUpdateChannel}`. One rename produced one frame with only that card's fields.
+  - GraphQL subscription socket (graphql-ws): `onBoardUpdated` / `onWorkspaceUpdated` with `_deltas` and `extensions.sequenceNumber`.
+  - **Flowdeck's contract below is independent;** it only confirms the same ingredients (per-channel sequence + field deltas).
 - **Fallback:** if the socket can't connect within 10 s, poll `GET /boards/:id/events?sinceSeq=` every 5 s while the tab is visible and every 60 s when hidden. DOC D16 records Trello used polling as a fallback.
 
 ### Client → server
@@ -102,6 +110,7 @@
 { "type": "subscribe",   "board": "<boardId>", "sinceSeq": 1234 }
 { "type": "unsubscribe", "board": "<boardId>" }
 { "type": "presence",    "board": "<boardId>", "cardId": "<cardId|null>" }
+{ "type": "editing",     "board": "<boardId>", "cardId": "<cardId>", "field": "description", "active": true }
 ```
 
 ### Server → client
@@ -113,6 +122,8 @@
             "from": { "listId": "...", "position": "a0" } } }
 { "type": "resync_required", "board": "<id>", "reason": "gap_too_large" }
 { "type": "board.access_revoked", "board": "<id>" }
+{ "type": "board.member_role_changed", "board": "<id>", "user": "<id>", "role": "admin|member|observer" }
+{ "type": "editing", "board": "<id>", "cardId": "<id>", "field": "description|name", "users": [ "<userId>" ] }
 { "type": "notification", "notification": { } }
 { "type": "presence", "board": "<id>", "users": [ { "id": "...", "cardId": null } ] }
 ```
@@ -124,7 +135,22 @@
 4. **Authorization:** checked on subscribe and re-checked on membership or visibility change (04 invariant 6). Events are filtered per recipient. For example, an observer still receives all board events, but never another user's notifications.
 5. **Fan-out:** single node uses in-process pub/sub fed by Postgres `LISTEN/NOTIFY` after commit. Multi-node (later) uses Redis or NATS. DOC D28 and 3P T06 note that Trello moved Redis → RabbitMQ → Kafka at much larger scale; a small team does not need that.
 6. **Payload:** events carry the changed fields and the new `version`, never full boards. Card detail fetches are lazy.
-7. **Latency target:** p95 < 500 ms from commit to delivery on a single node (DOC D16 reports "well under a second" for Trello historically).
+7. **Latency target:** p95 < 500 ms from commit to delivery on a single node (DOC D16 reports "well under a second" for Trello historically; observed 0.39–0.70 s between two users, OBS O06).
+8. **Reconnect target:** after a reconnect, missed events are applied within 2 s (Trello: 2.75 s, OBS O06), using `sinceSeq`.
+9. **Role and access events:** a role change produces `board.member_role_changed` to the affected user's sockets. Removal produces `board.access_revoked` within 2 s, unless the user can still see the board through the workspace; then they get `board.member_role_changed` with role `null` and stay subscribed read-only or with workspace rights.
+10. **Editing presence:** `editing` messages are ephemeral (not in `seq`), expire after 30 s without a heartbeat, and drive the "<name> is editing" indicator (Trello shows the other editor's avatar, OBS O06).
+
+### Notification triggers (OBS O06 → Flowdeck)
+
+| Event | Notified users (never the actor) |
+|---|---|
+| `comment.added` with `@user` | the mentioned user, if they can see the board |
+| `card.member_added` / `card.member_removed` | the added / removed user |
+| `card.due_changed`, `comment.added`, `attachment.added`, `card.completed` | card members and card watchers |
+| `card.created` | list watchers and board watchers |
+| `list.renamed` | nobody (Trello sends none either) |
+| `board.member_added`, `workspace.member_added` | the added user |
+| access request | board admins |
 
 ### Event names
 Mirror activity types (05): `board.updated`, `board.closed`, `board.member_*`, `list.created|updated|moved|archived|restored|deleted`, `card.created|updated|moved|copied|archived|restored|deleted`, `card.label_*`, `card.member_*`, `checklist.*`, `check_item.*`, `comment.*`, `attachment.*`, `label.created|updated|deleted`.
